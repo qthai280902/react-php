@@ -1,0 +1,23 @@
+# Phớt lờ các thư mục và tệp không cần thiết
+
+# Dependency (Quan trọng nhất)
+/fe_react/node_modules/
+node_modules/
+
+# Build files
+/fe_react/dist/
+
+# Local configuration & Secrets
+/be_php/config/database.php
+.env
+.env.local
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
