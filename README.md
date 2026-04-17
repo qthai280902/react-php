@@ -1,72 +1,118 @@
-# 🚀 Social Blog Platform
+<div align="center">
+  <h1>🚀 MyBlog - Enterprise Social Platform</h1>
+  <p><i>Nền tảng chia sẻ kiến thức & Mạng xã hội chuyên gia</i></p>
+  
+  [![React](https://img.shields.io/badge/Frontend-React_18-61DAFB?style=for-the-badge&logo=react)](https://reactjs.org/)
+  [![PHP](https://img.shields.io/badge/Backend-PHP_8.2+-777BB4?style=for-the-badge&logo=php)](https://php.net/)
+  [![MySQL](https://img.shields.io/badge/Database-MySQL_8.0-4479A1?style=for-the-badge&logo=mysql)](https://mysql.com/)
+  [![Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
+</div>
 
-[![React](https://img.shields.io/badge/Frontend-React%2018-blue)](https://reactjs.org/)
-[![PHP](https://img.shields.io/badge/Backend-PHP%20PDO-777bb4)](https://www.php.net/)
-[![Tailwind](https://img.shields.io/badge/Styling-Tailwind%20CSS-38b2ac)](https://tailwindcss.com/)
-[![License](https://img.shields.io/badge/Security-JWT%20Validated-green)](https://jwt.io/)
+<br/>
 
-**Social Blog Platform** là một nền tảng mạng xã hội nội dung hiện đại, được xây dựng theo kiến trúc **Decoupled (Tách biệt hoàn toàn)**. Dự án tập trung vào trải nghiệm người dùng High-tech, hệ thống tương tác thời gian thực và cơ chế Gamification độc đáo.
+## 📖 Giới thiệu (Overview)
+**MyBlog** không chỉ là một blog đơn thuần, mà là một nền tảng lai (hybrid) mạng xã hội chuyên gia được kiến trúc theo tiêu chuẩn **Decoupled (Headless)**:
+- **Frontend** vận hành dưới dạng **Single Page Application (SPA)** cực nhẹ, xây dựng bằng React 18, được tối ưu UX/UI bởi Tailwind CSS.
+- **Backend** là một hệ thống **RESTful API thuần (Vanilla PHP)** siêu tốc độ, không vướng bận các framework đồ sộ, tối đa hóa hiệu năng truy xuất thông qua PDO.
+
+Mục tiêu cốt lõi của kiến trúc này là "Bảo vệ luồng dữ liệu - Tối ưu hóa trải nghiệm người dùng", loại bỏ hoàn toàn độ trễ ảo.
 
 ---
 
 ## ✨ Tính năng nổi bật (Key Features)
 
-### 🎮 Hệ thống Gamification
-- **Quy tắc đăng bài:** Phân cấp người dùng dựa trên mức độ tương tác thực tế (Followers & Likes). Kiểm soát chất lượng nội dung ngay từ khâu đầu vào.
+### 1. Hệ thống User Profile V2
+- **Đa phương tiện (Media-First)**: Hỗ trợ linh hoạt ảnh đại diện tròn (Avatar) và viền toàn cảnh 16:9 (Cover Image) với quy trình nén và upload an toàn.
+- **Đồng bộ hóa Không độ trễ (Zero-Latency Sync)**: Sử dụng mô hình `Global State (Context API)`, mọi thay đổi trên form cập nhật lập tức làm mới Virtual DOM của toàn bộ Application (Navbar, Header, Card) mà không cần F5.
 
-### 👤 Social Identity
-- **Profile cá nhân:** Hiển thị thống kê thời gian thực (Follower, Following, Likes).
-- **Tabbed UI:** Quản lý bài viết và nội dung **Repost (Đăng lại)** chuyên nghiệp.
-- **Privacy:** Tính năng Ẩn/Hiện bài Repost cho chủ sở hữu.
+### 2. Gamification & Hệ thống Cấp bậc
+- **Phân quyền chặt chẽ (RBAC)**: Chỉ định rõ `Admin 🤖` và `User`.
+- **Huy hiệu Thành tựu (Badges)**: Tự động phân luồng huy hiệu (Đồng, Bạc, Vàng, Kim Cương) động theo số lượng follower (Trophy 🏆), kích thích người dùng cống hiến nội dung.
 
-### 🌟 Hệ thống Interaction
-- **Rating 5 sao:** Sử dụng Lucide Icons với giao diện hiện đại, cập nhật điểm không cần tải lại trang.
-- **Social Connect:** Theo dõi người dùng, Thả tim bài viết với hiệu ứng Elastic UI.
-- **Hashtag System:** Lọc bài viết thông minh theo hashtag từ Sidebar.
+### 3. [Đang phát triển] Real-time Notifications ⚡
+- Thay vì dùng cơ chế Short Polling nặng nề, hệ thống được thiết kế ngầm để hỗ trợ **SSE (Server-Sent Events)**, đẩy các luồng hoạt động trực tiếp từ PHP xuống luồng sự kiện của trình duyệt.
 
 ---
 
-## 🛠 Tech Stack
+## 🛡️ Kiến trúc Bảo mật & Backend cốt lõi (Core Security)
 
-| Thành phần | Công nghệ sử dụng |
-| :--- | :--- |
-| **Frontend** | React 18 (Vite), Tailwind CSS, Lucide React, Axios |
-| **Backend** | PHP 8.x (REST API), PDO Prepared Statements |
-| **Database** | MySQL |
-| **Security** | JWT/Auth Headers, CORS Preflight Interceptor |
+Kiến trúc Backend là **niềm kiêu hãnh** của MyBlog. Mọi lỗ hổng (vulnerabilities) đều bị khóa cứng tại lớp Database và API:
+
+1. **Giao dịch Nguyên tử (PDO Transactions)**:
+   Mọi luồng dữ liệu (Xóa cache ảnh, Lưu Audit, Thay đổi Profile) đều được cuộn kín trong Transaction (`BEGIN TRANSACTION -> COMMIT / ROLLBACK`). Nếu mất mạng hoặc đứt gãy luồng ghi vào disk, dữ liệu lập tức phục hồi về nguyên trạng, quét sạch mọi tập tin Upload rác.
+2. **Chặn Đứng Leo Thang Đặc Quyền (Anti-Privilege Escalation)**:
+   Các Input gửi lên được sanitize nghiêm ngặt. Hệ thống **ép chết** hai Key độc hại `username` và `id` ở tận màng lọc API, ngăn chặn hacker can thiệp cấu trúc Cột lõi (Core Columns).
+3. **Thiết Quân Luật: Cooldown Đổi Tên Định Danh (7-Day Limit)**:
+   - Thuật toán khóa 7 ngày ép buộc bằng truy vấn **MySQL Thời Gian Thực (`TIMESTAMPDIFF(SECOND, changed_at, NOW())`)**, loại bỏ hoàn toàn rủi ro sai lệch Múi giờ do vòng lặp PHP gây ra.
+   - Thao túng Postman gửi request liên tục sẽ bị Database Server dội ngược bằng lỗi **HTTP 429 - Too Many Requests**.
+4. **Nhật Ký Kiểm Toán (Audit Trail)**:
+   Hệ thống lưu lại mọi "phiên bản" đổi tên của người dùng (`old_name`, `new_name`, `changed_at` trong `user_name_history`). Đảm bảo dấu vết kỹ thuật số là bất khả thi để xóa mờ.
 
 ---
 
-## 🚀 Hướng dẫn cài đặt
+## 📂 Cấu trúc Thư mục (Folder Structure)
 
-### 1. Cấu hình Database
-- Import file SQL vào MySQL.
-- Cấu hình tại `be_php/config/database.php`.
-
-### 2. Cài đặt Backend
-- Đặt thư mục `be_php` vào server Apache (XAMPP, Laragon).
-- Đảm bảo port kết nối chuẩn xác.
-
-### 3. Cài đặt Frontend
-```bash
-cd fe_react
-npm install
-npm run dev
+Kiến trúc phân tách ranh giới rõ ràng:
+```text
+📦 MyBlog
+ ┣ 📂 be_php/                     👉 [BACKEND CORE] Hệ thống RESTful API
+ ┃ ┣ 📂 api/                      # Routing Controller (users, posts, auth)
+ ┃ ┣ 📂 config/                   # Chuỗi kết nối PDO (database.php), JWT Secret
+ ┃ ┣ 📂 uploads/                  # Vùng an toàn vật lý chứa Media
+ ┃ ┗ 📜 migration_v8_fix...sql    # Kịch bản Build cấu trúc Database & Audit Log
+ ┃
+ ┗ 📂 fe_react/                   👉 [FRONTEND CORE] Trình diễn UI
+   ┣ 📂 src/
+   ┃ ┣ 📂 api/                    # Interceptors bọc Axios
+   ┃ ┣ 📂 components/             # Reusable UI (Navbar, EditProfileModal)
+   ┃ ┣ 📂 context/                # Trạm điều khiển LocalStorage + Global State
+   ┃ ┣ 📂 pages/                  # Router Views (UserProfile, Dashboard)
+   ┃ ┗ 📜 main.jsx                # Root Bootstrap, Injection Provider
+   ┗ 📜 package.json              # Môi trường hệ sinh thái NodeJS
 ```
 
 ---
 
-## 🛡️ Bảo mật & Troubleshooting
+## 🚀 Hướng dẫn Cài đặt (Installation Guide)
 
-### 🌐 Lỗi CORS Preflight
-Dự án đã xử lý triệt để lỗi `401 Unauthorized` cho request `OPTIONS` trong `token_helper.php`:
-```php
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
-}
-```
+Để thiết lập Local, hãy tuân thủ trình tự Khởi động 3 bước:
+
+#### Bước 1: Setup Database
+1. Bật **MySQL** từ XAMPP hoặc DB Engine.
+2. Tạo CSDL rỗng tên `blog_db` mang chuẩn `utf8mb4_unicode_ci`.
+3. Import các file `migration_*.sql` (Bắt buộc chạy `migration_v8_fix_history.sql` để xây dựng hàng rào kiểm toán danh tính).
+
+#### Bước 2: Setup API Backend (PHP)
+1. Kéo toàn bộ folder vào htdocs (VD: `htdocs/revphp`).
+2. Tới file `be_php/config/database.php` và điều chỉnh chuỗi kết nối PDO cho khớp CSDL nội bộ.
+3. Đảm bảo thư mục `be_php/uploads/` có quyền **Write/Read** cho Webserver chạy ảnh.
+
+#### Bước 3: Build Không Gian Frontend
+1. Mở IDE Terminal, cd vào `fe_react/`:
+    ```bash
+    cd fe_react
+    npm install
+    ```
+2. Khởi chạy máy chủ ảo:
+    ```bash
+    npm run dev
+    ```
+> Server API chuẩn sẽ chạy tại `http://localhost:8000`, Server Giao diện chạy tại `http://localhost:5173`.
 
 ---
 
-Được xây dựng với kiến trúc Decoupled hiện đại 🚀
+## 🔌 Tóm tắt API Endpoints Tiêu Biểu
+
+- `POST /api/users/update_profile.php`: 
+   - **Mục tiêu**: Nâng cấp hồ sơ bằng Multipart/form-data.
+   - **Xử lý ngầm**: Kiểm tra quyền chặn Leo thang -> So sánh Timer 7 ngày Cooldown trên Database -> Ghi file vật lý -> Transaction PDO (Update Users + Insert Audit Log) -> Dọn File Rác -> Trả về JSON Data tươi kèm JWT x2.
+- `GET /api/users/get_name_history.php`:
+   - **Mục tiêu**: Lấy lịch sử chống giả mạo cho cá nhân User đang đăng nhập, tính bằng `d/m/Y - H:i:s`.
+- `GET /api/posts/read.php`: 
+   - **Mục tiêu**: Lưới dữ liệu (Grid) cung cấp Newsfeed trang HomePage.
+- ... (Còn nữa)
+
+---
+<p align="center">
+  <i>Được rèn giũa và hoàn thiện bởi tiêu chuẩn <b>Enterprise level</b>. Bảo mật & Tốc độ lên hàng đầu!</i>
+</p>
