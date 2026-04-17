@@ -1,6 +1,7 @@
 <?php
 
 include_once '../../config/database.php';
+include_once '../../config/id_helper.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -47,6 +48,7 @@ if ($row) {
     $row['total_likes'] = (int)$row['total_likes'];
     $row['total_comments'] = (int)$row['total_comments'];
     $row['author_followers'] = (int)$row['author_followers'];
+    $row['author_uid'] = encodeId($row['author_id']);
 
     // ── QUERY PHỤ: Lấy ảnh Gallery từ post_images ──
     $img_stmt = $db->prepare("SELECT id, image_url, created_at FROM post_images WHERE post_id = ? ORDER BY created_at ASC");

@@ -228,9 +228,16 @@ const PostList = () => {
                                 {/* ── NỘI DUNG CONTENT ── */}
                                 <div className="flex-1 flex flex-col p-5">
                                     {/* Meta data */}
-                                    <div className="flex items-center space-x-2 text-[11px] text-gray-500 mb-3 font-medium uppercase tracking-widest">
-                                        <Link to={`/profile/${post.author_id}`} className="font-bold text-slate-800 hover:text-blue-600 transition-colors no-underline">
-                                            @{post.author_name}
+                                    <div className="flex items-center space-x-2 text-[11px] text-gray-500 mb-4 font-medium uppercase tracking-widest">
+                                        <Link to={`/profile/${post.author_uid}`} className="flex items-center gap-2 font-bold text-slate-800 hover:text-blue-600 transition-colors no-underline group/auth">
+                                            <div className="w-6 h-6 rounded-lg bg-slate-900 flex items-center justify-center text-white text-[8px] font-black overflow-hidden shadow-sm group-hover/auth:bg-blue-600 transition-colors">
+                                                {post.author_avatar ? (
+                                                    <img src={`http://localhost:8000/uploads/${post.author_avatar}`} className="w-full h-full object-cover" alt="" />
+                                                ) : (
+                                                    <span>{(post.author_full_name || post.author_name || '?').charAt(0)}</span>
+                                                )}
+                                            </div>
+                                            <span>{post.author_full_name || post.author_name}</span>
                                         </Link>
                                         <span>•</span>
                                         <span className="font-mono">{new Date(post.created_at).toLocaleDateString()}</span>

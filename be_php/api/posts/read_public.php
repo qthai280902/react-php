@@ -1,6 +1,7 @@
 <?php
 
 include_once '../../config/database.php';
+include_once '../../config/id_helper.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -92,6 +93,7 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $row['avg_rating'] = $row['avg_rating'] ? round((float)$row['avg_rating'], 1) : 0;
     $row['content']    = html_entity_decode($row['content']);
     $row['hot_score']  = (int)$row['total_likes'] + (int)$row['total_comments'];
+    $row['author_uid'] = encodeId($row['author_id']);
     $posts[] = $row;
 }
 

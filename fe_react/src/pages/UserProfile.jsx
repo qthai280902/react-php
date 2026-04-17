@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
 import { Eye, EyeOff, Heart, Repeat, User, Users, ThumbsUp, ChevronRight, Trash2, RotateCcw, AlertTriangle, Archive } from 'lucide-react';
 import UserBadge from '../components/UserBadge';
 import EditProfileModal from '../components/EditProfileModal';
+import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 
 const UserProfile = () => {
     const { id } = useParams();
@@ -16,16 +18,38 @@ const UserProfile = () => {
     const [loading, setLoading] = useState(true);
     const [isFollowing, setIsFollowing] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    
+    // State cho ConfirmModal tùy chỉnh
+    const [confirmState, setConfirmState] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'warning',
+        onConfirm: () => {}
+    });
 
     const { user: currentUser, setAuthUser } = useAuth();
     const token = localStorage.getItem('token');
-    const isOwnProfile = currentUser?.id == id;
+    const navigate = useNavigate();
+
+    // [DỌN DẸP BẢO MẬT]: Không chặn đứng trang nếu là Guest hoặc xem Profile người khác
+    // Tuy nhiên nếu chưa login (không có token), vẫn nên đẩy ra login để bảo vệ API Endpoint
+    useEffect(() => {
+        if (!token) {
+            navigate('/login');
+            return;
+        }
+    }, [token, navigate]);
+
+    const isOwnProfile = currentUser?.uid === id;
+    const [followLoading, setFollowLoading] = useState(false);
 
     useEffect(() => {
+        if (!id) return;
         fetchProfile();
         fetchUserPosts();
         fetchUserReposts();
-    }, [id]);
+    }, [id]); // BẮT BUỘC: id trong dependency array để fix lỗi cache component khi nhảy profile
 
     useEffect(() => {
         if (isOwnProfile && activeTab === 'trash') {
@@ -35,8 +59,20 @@ const UserProfile = () => {
 
     const fetchProfile = async () => {
         try {
-            const data = await axiosClient.get(`/api/users/profile.php?id=${id}`);
-            setProfile(data);
+            const res = await axiosClient.get(`/api/users/profile.php?id=${id}`);
+            console.log("Dữ liệu fetchProfile:", res);
+
+            // Phòng thủ mức độ đỏ: Bóc tách data an toàn
+            const profileData = res?.data?.data || res?.data;
+            
+            if (profileData && (profileData.id || profileData.username)) {
+                setProfile(profileData);
+                // [SYNC STATE]: Khởi tạo trạng thái theo dõi từ API
+                setIsFollowing(profileData.is_following || false);
+            } else {
+                console.error("Lỗi: Dữ liệu Profile trả về rỗng hoặc bị lỗi cấu trúc.");
+                throw new Error("Mất dữ liệu đồng bộ Profile.");
+            }
             setLoading(false);
         } catch (err) {
             console.error(err);
@@ -46,23 +82,29 @@ const UserProfile = () => {
 
     const fetchUserPosts = async () => {
         try {
-            const data = await axiosClient.get(`/api/posts/read_user_posts.php?user_id=${id}`, {
+            const res = await axiosClient.get(`/api/posts/read_user_posts.php?user_id=${id}`, {
                 headers: token ? { 'Authorization': 'Bearer ' + token } : {}
             });
-            setPosts(Array.isArray(data) ? data : []);
+            // [BỐC TÁCH AN TOÀN]: API trả về { status: 'success', data: [...] }
+            const postData = res?.data || res;
+            setPosts(Array.isArray(postData) ? postData : []);
         } catch (err) {
-            console.error(err);
+            console.error("Fetch Posts Error:", err);
+            setPosts([]);
         }
     };
 
     const fetchUserReposts = async () => {
         try {
-            const data = await axiosClient.get(`/api/users/read_reposts.php?user_id=${id}`, {
+            const res = await axiosClient.get(`/api/users/read_reposts.php?user_id=${id}`, {
                 headers: { 'Authorization': 'Bearer ' + token }
             });
-            setReposts(data);
+            // [BỐC TÁCH AN TOÀN]: API trả về { status: 'success', data: [...] }
+            const repostData = res?.data || res;
+            setReposts(Array.isArray(repostData) ? repostData : []);
         } catch (err) {
-            console.error(err);
+            console.error("Fetch Reposts Error:", err);
+            setReposts([]);
         }
     };
 
@@ -79,22 +121,44 @@ const UserProfile = () => {
     };
 
     const handleFollow = async () => {
-        if (!token) return alert("Vui lòng đăng nhập để theo dõi.");
+        if (!token) return toast.error("Vui lòng đăng nhập để theo dõi.");
+        if (followLoading) return; // Chống double-click
+
+        setFollowLoading(true);
         try {
-            const res = await axiosClient.post('/api/social/follow.php',
-                { following_id: id },
+            const res = await axiosClient.post('/api/users/follow.php',
+                { user_id: id }, // Truyền UID băm
                 { headers: { 'Authorization': 'Bearer ' + token } }
             );
-            setIsFollowing(res.status === 'followed');
-            setProfile({
-                ...profile,
-                stats: {
-                    ...profile.stats,
-                    followers: res.status === 'followed' ? profile.stats.followers + 1 : profile.stats.followers - 1
-                }
-            });
+
+            console.log("Response Follow logic:", res);
+
+            // [PHÒNG THỦ MỨC CAO]: Kiểm tra trạng thái thành công thật từ Backend
+            if (res.status !== 'success') {
+                toast.error(res.message || "Không thể thực hiện hành động này.");
+                return;
+            }
+
+            const newFollowerCount = res?.data?.follower_count ?? res?.follower_count;
+            const newIsFollowing = res?.data?.is_following ?? res?.is_following;
+
+            // [INTEGRITY CHECK]: Chỉ cập nhật khi có dữ liệu số hợp lệ
+            if (newFollowerCount !== undefined) {
+                setIsFollowing(!!newIsFollowing);
+                setProfile(prev => ({
+                    ...prev,
+                    stats: {
+                        ...(prev?.stats || {}),
+                        followers: parseInt(newFollowerCount)
+                    }
+                }));
+            }
+            
+            toast.success(res?.message || res?.data?.message || (newIsFollowing ? "Đã theo dõi" : "Đã bỏ theo dõi"));
         } catch (err) {
-            alert("Lỗi khi thực hiện hành động.");
+            toast.error(err.response?.data?.message || "Lỗi khi thực hiện hành động.");
+        } finally {
+            setFollowLoading(false);
         }
     };
 
@@ -108,9 +172,9 @@ const UserProfile = () => {
                 if (r.repost_id === repostId) return { ...r, is_hidden: !r.is_hidden };
                 return r;
             }));
-            alert(res.message);
+            toast.success(res.message);
         } catch (err) {
-            alert("Lỗi khi cập nhật trạng thái hiển thị.");
+            toast.error("Lỗi khi cập nhật trạng thái hiển thị.");
         }
     };
 
@@ -125,24 +189,53 @@ const UserProfile = () => {
                 if (p.id === postId) return { ...p, is_hidden: res.is_hidden };
                 return p;
             }));
-            alert(res.message);
+            toast.success(res.message);
         } catch (err) {
-            alert(err.response?.data?.message || "Lỗi khi thay đổi trạng thái.");
+            toast.error(err.response?.data?.message || "Lỗi khi thay đổi trạng thái.");
         }
     };
 
-    const handleSoftDelete = async (postId) => {
-        if (!window.confirm("Bài viết sẽ được chuyển vào Thùng rác. Bạn có 30 ngày để khôi phục. Tiếp tục?")) return;
-        try {
-            const res = await axiosClient.post('/api/posts/soft_delete.php',
-                { post_id: postId },
-                { headers: { 'Authorization': 'Bearer ' + token } }
-            );
-            setPosts(posts.filter(p => p.id !== postId));
-            alert(res.message);
-        } catch (err) {
-            alert(err.response?.data?.message || "Lỗi khi xóa bài viết.");
-        }
+    const handleSoftDelete = (postId) => {
+        setConfirmState({
+            isOpen: true,
+            title: "Xóa bài viết",
+            message: "Bài viết sẽ được chuyển vào Thùng rác. Bạn có 30 ngày để khôi phục. Tiếp tục?",
+            type: "warning",
+            onConfirm: async () => {
+                setConfirmState(prev => ({ ...prev, isOpen: false }));
+                try {
+                    const res = await axiosClient.post('/api/posts/soft_delete.php',
+                        { post_id: postId },
+                        { headers: { 'Authorization': 'Bearer ' + token } }
+                    );
+                    setPosts(posts.filter(p => p.id !== postId));
+                    toast.success(res.message);
+                } catch (err) {
+                    toast.error(err.response?.data?.message || "Lỗi khi xóa bài viết.");
+                }
+            }
+        });
+    };
+
+    const handleSoftDeleteRepost = (repostId) => {
+        setConfirmState({
+            isOpen: true,
+            title: "Xóa lượt đăng lại",
+            message: "Hành động này sẽ chuyển lượt đăng lại này vào Thùng rác. Bạn có thể khôi phục bất cứ lúc nào trong 30 ngày. Xóa?",
+            type: "warning",
+            onConfirm: async () => {
+                setConfirmState(prev => ({ ...prev, isOpen: false }));
+                try {
+                    await axiosClient.get(`/api/reposts/soft_delete.php?id=${repostId}`, {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    setReposts(reposts.filter(r => r.repost_id !== repostId));
+                    toast.success("Đã chuyển vào thùng rác.");
+                } catch (err) {
+                    toast.error(err.response?.data?.message || "Lỗi khi xóa lượt đăng lại.");
+                }
+            }
+        });
     };
 
     const handleRestore = async (postId) => {
@@ -152,25 +245,33 @@ const UserProfile = () => {
                 { headers: { 'Authorization': 'Bearer ' + token } }
             );
             setTrashItems(trashItems.filter(t => t.id !== postId));
-            alert(res.message);
+            toast.success(res.message);
             fetchUserPosts(); // Refresh danh sách bài viết
         } catch (err) {
-            alert(err.response?.data?.message || "Lỗi khi khôi phục.");
+            toast.error(err.response?.data?.message || "Lỗi khi khôi phục.");
         }
     };
 
-    const handlePermanentDelete = async (postId) => {
-        if (!window.confirm("⚠️ CẢNH BÁO: Hành động này KHÔNG THỂ hoàn tác!\n\nBài viết và TẤT CẢ hình ảnh liên quan sẽ bị xóa vĩnh viễn khỏi hệ thống.\n\nBạn có chắc chắn muốn tiếp tục?")) return;
-        try {
-            const res = await axiosClient.post('/api/posts/permanent_delete.php',
-                { post_id: postId },
-                { headers: { 'Authorization': 'Bearer ' + token } }
-            );
-            setTrashItems(trashItems.filter(t => t.id !== postId));
-            alert(res.message);
-        } catch (err) {
-            alert(err.response?.data?.message || "Lỗi khi xóa vĩnh viễn.");
-        }
+    const handlePermanentDelete = (postId) => {
+        setConfirmState({
+            isOpen: true,
+            title: "XÓA VĨNH VIỄN",
+            message: "⚠️ CẢNH BÁO: Hành động này KHÔNG THỂ hoàn tác! Bài viết và TẤT CẢ hình ảnh sẽ bị xóa vĩnh viễn.",
+            type: "danger",
+            onConfirm: async () => {
+                setConfirmState(prev => ({ ...prev, isOpen: false }));
+                try {
+                    const res = await axiosClient.post('/api/posts/permanent_delete.php',
+                        { post_id: postId },
+                        { headers: { 'Authorization': 'Bearer ' + token } }
+                    );
+                    setTrashItems(trashItems.filter(t => t.id !== postId));
+                    toast.success(res.message);
+                } catch (err) {
+                    toast.error(err.response?.data?.message || "Lỗi khi xóa vĩnh viễn.");
+                }
+            }
+        });
     };
 
     if (loading) return <div className="text-center py-20 font-bold text-slate-400 animate-pulse uppercase tracking-widest text-sm">Đang tải hồ sơ...</div>;
@@ -204,32 +305,48 @@ const UserProfile = () => {
                                     className="w-full h-full object-cover rounded-[2rem]"
                                 />
                             ) : (
-                                <div className="w-full h-full rounded-[2rem] bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-5xl font-black uppercase">
-                                    {profile?.username?.[0] || '?'}
+                                <div className="w-full h-full rounded-[2rem] bg-slate-900 flex items-center justify-center text-white text-5xl font-black uppercase">
+                                     <span>{(profile?.full_name || profile?.username || '?').charAt(0)}</span>
                                 </div>
                             )}
                         </div>
 
-                        {/* Thông tin tên và Huy hiệu */}
-                        <div className="flex-1 text-center md:text-left">
-                            <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight flex items-center justify-center md:justify-start gap-3">
-                                {profile?.full_name || profile?.username}
-                                <UserBadge role={profile?.role} followers={profile?.stats?.followers || 0} size={22} />
-                            </h1>
-                            <p className="text-slate-500 font-bold uppercase tracking-widest text-sm mt-1">@{profile?.username}</p>
-                        </div>
-                        
-                        {/* Nút Follow / Edit */}
-                        <div className="flex-shrink-0 mt-4 md:mt-0">
-                            {!isOwnProfile ? (
-                                <button onClick={handleFollow} className={`px-10 py-3 rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95 ${isFollowing ? 'bg-slate-100 text-slate-500' : 'bg-blue-600 text-white shadow-lg shadow-blue-200'}`}>
-                                    {isFollowing ? 'Huỷ theo dõi' : 'Đăng ký theo dõi'}
-                                </button>
-                            ) : (
-                                <button onClick={() => setIsEditModalOpen(true)} className="px-10 py-3 bg-slate-900 text-white font-black rounded-2xl hover:bg-black transition-all shadow-lg shadow-slate-900/20 active:scale-95 uppercase text-sm tracking-widest cursor-pointer">
-                                    Chỉnh sửa hồ sơ
-                                </button>
-                            )}
+                        {/* ── IDENTITY & ACTIONS ── */}
+                        <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-center md:items-center mt-4 md:mt-0 w-full gap-4">
+                                <div className="min-w-0 flex-1 text-center md:text-left">
+                                    <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center justify-center md:justify-start gap-3 truncate">
+                                        {profile?.full_name || profile?.username}
+                                        <UserBadge role={profile?.role} followers={profile?.stats?.followers || 0} size={22} />
+                                    </h1>
+                                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-1">@{profile?.username}</p>
+                                </div>
+
+                                <div className="flex-shrink-0">
+                                    {currentUser ? (
+                                        isOwnProfile ? (
+                                        <button 
+                                            onClick={() => setIsEditModalOpen(true)}
+                                            className="px-8 py-3 bg-slate-900 text-white font-black rounded-2xl hover:bg-black transition-all shadow-lg shadow-slate-900/20 active:scale-95 uppercase text-sm tracking-widest cursor-pointer"
+                                        >
+                                            Chỉnh sửa hồ sơ
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={handleFollow}
+                                            disabled={followLoading}
+                                            className={`px-10 py-3 rounded-2xl font-black text-sm uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                                isFollowing 
+                                                ? 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-red-50 hover:text-red-500 hover:border-red-100' 
+                                                : 'bg-blue-600 text-white shadow-xl shadow-blue-100 hover:bg-blue-700'
+                                            }`}
+                                        >
+                                            {followLoading ? 'Đang xử lý...' : (isFollowing ? 'Bỏ theo dõi' : 'Theo dõi')}
+                                        </button>
+                                        )
+                                    ) : null}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -240,7 +357,7 @@ const UserProfile = () => {
                                 <Users size={14} strokeWidth={2} />
                                 <span className="text-[10px] font-black uppercase tracking-widest">Followers</span>
                             </div>
-                            <p className="text-2xl font-black text-slate-900">{profile?.stats?.followers || 0}</p>
+                            <p className="text-2xl font-black text-slate-900">{profile?.stats?.followers ?? 0}</p>
                         </div>
                         <div className="text-center md:text-left">
                             <div className="flex items-center gap-2 mb-1 text-slate-400 justify-center md:justify-start">
@@ -267,7 +384,7 @@ const UserProfile = () => {
                         Posts ({posts.length})
                     </button>
                     <button onClick={() => setActiveTab('reposts')} className={`text-sm font-black pb-4 uppercase tracking-widest transition-all flex-shrink-0 ${activeTab === 'reposts' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
-                        Bài viết của tôi ({reposts.length})
+                        My Reposts ({reposts.length})
                     </button>
                     {isOwnProfile && (
                         <button onClick={() => setActiveTab('trash')} className={`text-sm font-black pb-4 uppercase tracking-widest transition-all flex-shrink-0 flex items-center gap-2 ${activeTab === 'trash' ? 'text-red-500 border-b-2 border-red-500' : 'text-slate-400 hover:text-slate-600'}`}>
@@ -339,13 +456,22 @@ const UserProfile = () => {
                                     </Link>
 
                                     {isOwnProfile && (
-                                        <button
-                                            onClick={() => handleToggleRepostVisibility(repost.repost_id)}
-                                            className={`absolute top-6 right-6 p-3 rounded-xl transition-all shadow-sm active:scale-90 ${repost.is_hidden ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-400 hover:bg-blue-600 hover:text-white'}`}
-                                            title={repost.is_hidden ? "Reveal Node" : "Secure Node"}
-                                        >
-                                            {repost.is_hidden ? <EyeOff size={18} strokeWidth={1.5} /> : <Eye size={18} strokeWidth={1.5} />}
-                                        </button>
+                                        <div className="absolute top-6 right-6 flex items-center gap-2 z-10">
+                                            <button
+                                                onClick={() => handleToggleRepostVisibility(repost.repost_id)}
+                                                className={`p-2.5 rounded-xl transition-all shadow-sm active:scale-90 ${repost.is_hidden ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-400 hover:bg-blue-600 hover:text-white'}`}
+                                                title={repost.is_hidden ? "Hiện" : "Ẩn"}
+                                            >
+                                                {repost.is_hidden ? <EyeOff size={16} strokeWidth={1.5} /> : <Eye size={16} strokeWidth={1.5} />}
+                                            </button>
+                                            <button
+                                                onClick={() => handleSoftDeleteRepost(repost.repost_id)}
+                                                className="p-2.5 rounded-xl bg-slate-100 text-slate-400 hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-90"
+                                                title="Xóa đăng lại"
+                                            >
+                                                <Trash2 size={16} strokeWidth={1.5} />
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             ))}
@@ -370,8 +496,9 @@ const UserProfile = () => {
                                             <div className="flex items-start justify-between">
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-3 mb-3 flex-wrap">
-                                                        <span className="text-[10px] font-black text-red-500 bg-red-50 px-3 py-1 rounded-full border border-red-100 uppercase tracking-widest flex items-center gap-1">
-                                                            <Archive size={10} strokeWidth={2} /> Trong thùng rác
+                                                        <span className={`text-[10px] font-black px-3 py-1 rounded-full border border-red-100 uppercase tracking-widest flex items-center gap-1 ${item.item_type === 'repost' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
+                                                            {item.item_type === 'repost' ? <Repeat size={10} /> : <Archive size={10} />}
+                                                            {item.item_type === 'repost' ? 'Repost Deleted' : 'Post Deleted'}
                                                         </span>
                                                         <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${item.days_remaining <= 7 ? 'text-red-600 bg-red-100 border border-red-200' : 'text-amber-600 bg-amber-50 border border-amber-200'}`}>
                                                             Còn {item.days_remaining} ngày
@@ -424,11 +551,19 @@ const UserProfile = () => {
                 token={token}
                 onSuccess={(updatedUser) => {
                     if (updatedUser) {
-                        // Cập nhật State cục bộ để UI Profile hiện ngay không cần tải lại
                         setProfile(prev => ({...prev, ...updatedUser}));
-                        // Context đã được update bên trong Modal nên ta không gọi lại updateProfile ở đây nữa
                     }
                 }}
+            />
+
+            {/* Custom confirmation dialog */}
+            <ConfirmModal 
+                isOpen={confirmState.isOpen}
+                onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmState.onConfirm}
+                title={confirmState.title}
+                message={confirmState.message}
+                type={confirmState.type}
             />
         </div>
     );

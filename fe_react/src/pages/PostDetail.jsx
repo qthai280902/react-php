@@ -3,6 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
 import { Heart, Repeat2, Star, Trash2, ArrowLeft, Send, X } from 'lucide-react';
 import UserBadge from '../components/UserBadge';
+import toast from 'react-hot-toast';
+import DOMPurify from 'dompurify';
+import ConfirmModal from '../components/ConfirmModal';
 
 const PostDetail = () => {
     const { id } = useParams();
@@ -17,6 +20,14 @@ const PostDetail = () => {
     const [liked, setLiked] = useState(false);
     const [likeCount, setLikeCount] = useState(0);
     const [reposted, setReposted] = useState(false);
+
+    // State cho ConfirmModal
+    const [confirmState, setConfirmState] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => {}
+    });
 
     // Lightbox state cho gallery
     const [lightboxImg, setLightboxImg] = useState(null);
@@ -49,7 +60,7 @@ const PostDetail = () => {
 
     const handleCommentSubmit = async (e) => {
         e.preventDefault();
-        if (!token) return alert("Vui lòng đăng nhập để bình luận.");
+        if (!token) return toast.error("Vui lòng đăng nhập để bình luận.");
         if (!newComment.trim()) return;
 
         setSubmittingComment(true);
@@ -62,8 +73,9 @@ const PostDetail = () => {
             setComments([newCommentObj, ...comments]);
             setNewComment("");
             setSubmittingComment(false);
+            toast.success("Đã đăng bình luận");
         } catch (err) {
-            alert(err.response?.data?.message || "Lỗi khi gửi bình luận.");
+            toast.error(err.response?.data?.message || "Lỗi khi gửi bình luận.");
             setSubmittingComment(false);
         }
     };
@@ -76,17 +88,25 @@ const PostDetail = () => {
         return false;
     };
 
-    const handleDeleteComment = async (commentId) => {
-        if (!window.confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
-        try {
-            await axiosClient.post('/api/comments/delete.php', 
-                { id: commentId },
-                { headers: { 'Authorization': 'Bearer ' + token } }
-            );
-            setComments(comments.filter(c => c.id !== commentId));
-        } catch (err) {
-            alert(err.response?.data?.message || "Lỗi khi xóa bình luận.");
-        }
+    const handleDeleteComment = (commentId) => {
+        setConfirmState({
+            isOpen: true,
+            title: "Xóa bình luận",
+            message: "Bạn có chắc chắn muốn xóa bình luận này?",
+            onConfirm: async () => {
+                setConfirmState(prev => ({ ...prev, isOpen: false }));
+                try {
+                    await axiosClient.post('/api/comments/delete.php', 
+                        { id: commentId },
+                        { headers: { 'Authorization': 'Bearer ' + token } }
+                    );
+                    setComments(comments.filter(c => c.id !== commentId));
+                    toast.success("Đã xóa bình luận");
+                } catch (err) {
+                    toast.error(err.response?.data?.message || "Lỗi khi xóa bình luận.");
+                }
+            }
+        });
     };
 
     const handleRating = async (stars) => {
@@ -98,9 +118,9 @@ const PostDetail = () => {
             );
             setUserRating(stars);
             setPost({...post, avg_rating: res.new_avg});
-            alert(res.message);
+            toast.success(res.message);
         } catch (err) {
-            alert("Lỗi đánh giá.");
+            toast.error("Lỗi đánh giá.");
         }
     };
 
@@ -114,7 +134,7 @@ const PostDetail = () => {
             setLiked(res.status === 'liked');
             setLikeCount(res.total_likes);
         } catch (err) {
-            alert("Lỗi khi thả tim.");
+            toast.error("Lỗi khi thả tim.");
         }
     };
 
@@ -126,9 +146,9 @@ const PostDetail = () => {
                 { headers: { 'Authorization': 'Bearer ' + token } }
             );
             setReposted(res.status === 'reposted');
-            alert(res.message);
+            toast.success(res.message);
         } catch (err) {
-            alert("Lỗi khi Repost.");
+            toast.error("Lỗi khi Repost.");
         }
     };
 
@@ -152,11 +172,21 @@ const PostDetail = () => {
                 </div>
                 <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight mb-8 tracking-tighter">{post.title}</h1>
                 <div className="flex items-center space-x-6 text-slate-400">
-                    <Link to={`/profile/${post.author_id}`} className="flex items-center group no-underline gap-1">
-                        <div className="w-10 h-10 rounded-2xl bg-slate-900 mr-2 flex items-center justify-center font-black text-white group-hover:bg-blue-600 transition-colors uppercase">
-                            {post.author_name[0]}
+                    <Link to={`/profile/${post.author_uid}`} className="flex items-center group no-underline gap-1">
+                        <div className="w-10 h-10 rounded-2xl bg-slate-900 mr-2 flex items-center justify-center font-black text-white group-hover:bg-blue-600 transition-colors uppercase overflow-hidden">
+                            {post.author_avatar ? (
+                                <img 
+                                    src={`http://localhost:8000/uploads/${post.author_avatar}`} 
+                                    className="w-full h-full object-cover" 
+                                    alt={post.author_name} 
+                                />
+                            ) : (
+                                <span>{(post.author_full_name || post.author_name || '?').charAt(0)}</span>
+                            )}
                         </div>
-                        <span className="font-black text-slate-900 group-hover:text-blue-600 transition-colors uppercase text-sm tracking-tight">@{post.author_name}</span>
+                        <span className="font-black text-slate-900 group-hover:text-blue-600 transition-colors uppercase text-sm tracking-tight">
+                            {post.author_full_name || post.author_name}
+                        </span>
                         <UserBadge followers={post.author_followers || 0} size={16} />
                     </Link>
                     <span className="text-xs font-mono">{new Date(post.created_at).toLocaleDateString('vi-VN', { dateStyle: 'long' })}</span>
@@ -170,10 +200,11 @@ const PostDetail = () => {
                 </div>
             )}
 
-            {/* ── NỘI DUNG BÀI VIẾT ── */}
-            <div className="prose prose-lg prose-slate max-w-none text-slate-800 leading-[1.8] text-justify mb-12 px-4 whitespace-pre-line">
-                {post.content}
-            </div>
+            {/* ── NỘI DUNG BÀI VIẾT (RICH TEXT READY) ── */}
+            <div 
+                className="prose prose-lg prose-slate max-w-none text-slate-800 leading-[1.8] text-justify mb-12 px-4 rich-text-content"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
+            />
 
             {/* ── GALLERY ẢNH PHỤ ── */}
             {gallery.length > 0 && (
@@ -319,7 +350,7 @@ const PostDetail = () => {
                 <div className="space-y-10 mb-20">
                     {comments.map((comment) => (
                         <div key={comment.id} className="flex space-x-6 group/item animate-in fade-in slide-in-from-left duration-500">
-                            <Link to={`/profile/${comment.user_id}`} className="flex-shrink-0 no-underline">
+                            <Link to={`/profile/${comment.user_uid}`} className="flex-shrink-0 no-underline">
                                 <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center font-black text-slate-300 text-xl border border-slate-50 transition-all group-hover/item:bg-blue-600 group-hover/item:text-white group-hover/item:shadow-xl group-hover/item:shadow-blue-200">
                                     {comment.username?.[0]?.toUpperCase() || '?'}
                                 </div>
@@ -328,7 +359,7 @@ const PostDetail = () => {
                                 <div className="bg-white rounded-[2rem] p-8 border border-slate-50 shadow-sm relative group hover:shadow-lg transition-all duration-500">
                                     <div className="flex items-center justify-between mb-3">
                                         <div className="flex items-center gap-2">
-                                            <Link to={`/profile/${comment.user_id}`} className="font-black text-slate-900 hover:text-blue-600 no-underline text-lg uppercase tracking-tight">
+                                            <Link to={`/profile/${comment.user_uid}`} className="font-black text-slate-900 hover:text-blue-600 no-underline text-lg uppercase tracking-tight">
                                                 @{comment.username}
                                             </Link>
                                             {comment.followers !== undefined && (
@@ -355,6 +386,16 @@ const PostDetail = () => {
                     ))}
                 </div>
             </section>
+
+            {/* Confirm Modal */}
+            <ConfirmModal 
+                isOpen={confirmState.isOpen}
+                onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmState.onConfirm}
+                title={confirmState.title}
+                message={confirmState.message}
+                type="warning"
+            />
         </article>
     );
 };

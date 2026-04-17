@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, User, PlusSquare, LayoutDashboard, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -8,14 +8,13 @@ const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    // Removed old local storage logic since AuthContext manages it globally
-  }, []);
-
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
+
+  // [ĐỒNG BỘ HIỂN THỊ]: Ưu tiên Full Name, dùng initials làm fallback
+  const displayName = user?.full_name || user?.username || 'Guest';
 
   return (
     <nav className="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
@@ -42,15 +41,20 @@ const Navbar = () => {
                   </Link>
                 )}
                 <div className="flex items-center space-x-4 pl-4 border-l border-slate-200">
-                  <Link to={`/profile/${user.id}`} className="flex items-center space-x-2 text-slate-900 hover:text-blue-600 transition-colors no-underline">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 overflow-hidden shadow-sm">
-                      {user.avatar_image ? (
-                        <img src={`http://localhost:8000/uploads/${user.avatar_image}`} alt="Avatar" className="w-full h-full object-cover" />
+                  <Link to={`/profile/${user.uid}`} className="flex items-center space-x-2 text-slate-900 hover:text-blue-600 transition-colors no-underline">
+                    {/* Avatar Container chuẩn UI Premium */}
+                    <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-[10px] font-black overflow-hidden shadow-sm uppercase border border-white">
+                      {user?.avatar_image ? (
+                        <img 
+                          src={`http://localhost:8000/uploads/${user.avatar_image}`} 
+                          alt="Avatar" 
+                          className="w-full h-full object-cover" 
+                        />
                       ) : (
-                        <User size={14} strokeWidth={2.5} />
+                        <span>{displayName.charAt(0)}</span>
                       )}
                     </div>
-                    <span className="normal-case font-bold">{user?.full_name || user?.username}</span>
+                    <span className="normal-case font-bold">{displayName}</span>
                   </Link>
                   <button 
                     onClick={handleLogout} 
@@ -87,8 +91,13 @@ const Navbar = () => {
                   <LayoutDashboard size={20} strokeWidth={1.5} /> Dashboard Admin
                 </Link>
               )}
-              <Link to={`/profile/${user.id}`} className="flex items-center gap-3 font-bold text-slate-900 no-underline px-4 py-2">
-                <User size={20} strokeWidth={1.5} /> Hồ sơ cá nhân
+              <Link to={`/profile/${user.uid}`} className="flex items-center gap-3 font-bold text-slate-900 no-underline px-4 py-2">
+                <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-[10px] font-black overflow-hidden shadow-sm uppercase">
+                   {user?.avatar_image ? (
+                        <img src={`http://localhost:8000/uploads/${user.avatar_image}`} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : <span>{displayName.charAt(0)}</span>}
+                </div>
+                Hồ sơ cá nhân
               </Link>
               <button onClick={handleLogout} className="flex items-center gap-3 w-full text-left font-bold text-red-500 uppercase text-sm px-4 py-2">
                 <LogOut size={20} strokeWidth={1.5} /> Đăng xuất

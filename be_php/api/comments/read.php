@@ -1,6 +1,7 @@
 <?php
 
 include_once '../../config/database.php';
+include_once '../../config/id_helper.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -29,6 +30,12 @@ $stmt = $db->prepare($query);
 $stmt->execute([$post_id]);
 
 $comments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// [URL HARDENING V2]: Bổ sung uid cho mỗi người bình luận
+foreach ($comments as &$c) {
+    $c['user_uid'] = encodeId($c['user_id']);
+    $c['followers'] = (int)$c['followers'];
+}
 
 http_response_code(200);
 echo json_encode($comments);

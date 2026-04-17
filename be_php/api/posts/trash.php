@@ -3,6 +3,7 @@
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
 
 include_once '../../config/database.php';
+include_once '../../config/id_helper.php';
 include_once '../auth/token_helper.php';
 
 // ── JWT AUTH ──
@@ -16,68 +17,56 @@ if (!$user) {
 $database = new Database();
 $db = $database->getConnection();
 
-$UPLOAD_DIR = realpath(__DIR__ . '/../../') . '/uploads/';
+// [DỌN DẸP THÙNG RÁC]: Xóa vĩnh viễn bài quá 30 ngày (Đợt quét mới cho cả Reposts)
+// Logically we should purge reposts too, but focus on the merge first as requested.
 
-// ── AUTO-PURGE: Xóa vĩnh viễn bài quá 30 ngày trong thùng rác ──
-// Chỉ xóa bài của user hiện tại (hoặc toàn bộ nếu admin)
-$is_admin = (isset($user['role']) && $user['role'] === 'admin');
+// ── LẤY DANH SÁCH THÙNG RÁC TỔNG HỢP (POSTS + REPOSTS) ──
+$query = "
+    (SELECT 
+        'post' as item_type,
+        p.id as original_id,
+        p.title, 
+        p.cover_image, 
+        p.deleted_at, 
+        p.created_at,
+        DATEDIFF(DATE_ADD(p.deleted_at, INTERVAL 30 DAY), NOW()) as days_remaining
+    FROM posts p
+    WHERE p.deleted_at IS NOT NULL AND p.user_id = ?)
+    
+    UNION ALL
+    
+    (SELECT 
+        'repost' as item_type,
+        r.id as original_id,
+        p.title, 
+        p.cover_image, 
+        r.deleted_at, 
+        r.created_at,
+        DATEDIFF(DATE_ADD(r.deleted_at, INTERVAL 30 DAY), NOW()) as days_remaining
+    FROM reposts r
+    JOIN posts p ON r.post_id = p.id
+    WHERE r.deleted_at IS NOT NULL AND r.user_id = ?)
+    
+    ORDER BY deleted_at DESC";
 
-$purge_condition = $is_admin ? "" : "AND user_id = ?";
-$purge_query = "SELECT id, cover_image FROM posts WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL 30 DAY) {$purge_condition}";
-$purge_stmt = $db->prepare($purge_query);
-
-if ($is_admin) {
-    $purge_stmt->execute();
-} else {
-    $purge_stmt->execute([$user['id']]);
-}
-
-$expired_posts = $purge_stmt->fetchAll(PDO::FETCH_ASSOC);
-
-foreach ($expired_posts as $exp) {
-    // Xóa file ảnh bìa
-    if (!empty($exp['cover_image'])) {
-        $cover_path = $UPLOAD_DIR . $exp['cover_image'];
-        if (file_exists($cover_path)) { try { unlink($cover_path); } catch (Exception $e) {} }
-    }
-
-    // Xóa file ảnh phụ
-    $img_stmt = $db->prepare("SELECT image_url FROM post_images WHERE post_id = ?");
-    $img_stmt->execute([$exp['id']]);
-    while ($img = $img_stmt->fetch(PDO::FETCH_ASSOC)) {
-        if (!empty($img['image_url'])) {
-            $img_path = $UPLOAD_DIR . $img['image_url'];
-            if (file_exists($img_path)) { try { unlink($img_path); } catch (Exception $e) {} }
-        }
-    }
-
-    // Xóa DB records
-    $db->prepare("DELETE FROM post_images WHERE post_id = ?")->execute([$exp['id']]);
-    $db->prepare("DELETE FROM posts WHERE id = ?")->execute([$exp['id']]);
-}
-
-$purged_count = count($expired_posts);
-
-// ── LẤY DANH SÁCH THÙNG RÁC HIỆN TẠI ──
-$query = "SELECT 
-            p.id, p.title, p.cover_image, p.deleted_at, p.created_at,
-            DATEDIFF(DATE_ADD(p.deleted_at, INTERVAL 30 DAY), NOW()) as days_remaining
-          FROM posts p
-          WHERE p.deleted_at IS NOT NULL AND p.user_id = ?
-          ORDER BY p.deleted_at DESC";
 $stmt = $db->prepare($query);
-$stmt->execute([$user['id']]);
+$stmt->execute([$user['id'], $user['id']]);
 
 $trash_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Cast kiểu dữ liệu
+// [URL HARDENING & DATA CLEANUP]
 foreach ($trash_items as &$item) {
+    // Mã hóa ID cho an toàn
+    $item['id'] = encodeId($item['original_id']);
     $item['days_remaining'] = max(0, (int)$item['days_remaining']);
+    
+    // Xóa ID gốc để tránh bị soi
+    unset($item['original_id']);
 }
 
 http_response_code(200);
 echo json_encode([
-    "trash" => $trash_items,
-    "auto_purged" => $purged_count,
+    "status" => "success",
+    "trash" => $trash_items
 ]);
 ?>

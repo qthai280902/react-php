@@ -1,6 +1,7 @@
 <?php
 
 include_once '../../config/database.php';
+include_once '../../config/id_helper.php';
 
 $database = new Database();
 $db = $database->getConnection();
@@ -14,8 +15,8 @@ if (empty($data->username) || empty($data->password)) {
     exit();
 }
 
-// Tìm user theo username
-$query = "SELECT id, username, password, role FROM users WHERE username = ? LIMIT 1";
+// SELECT đầy đủ thông tin để đồng bộ Avatar sau khi Re-login
+$query = "SELECT id, username, password, full_name, role, avatar_image, cover_image FROM users WHERE username = ? LIMIT 1";
 $stmt = $db->prepare($query);
 $stmt->execute([$data->username]);
 
@@ -24,14 +25,21 @@ if ($stmt->rowCount() > 0) {
     $id = $row['id'];
     $username = $row['username'];
     $hashed_password = $row['password'];
+    $full_name = $row['full_name'];
     $role = $row['role'];
+    $avatar_image = $row['avatar_image'];
+    $cover_image = $row['cover_image'];
 
     // Kiểm tra mật khẩu
     if (password_verify($data->password, $hashed_password)) {
-        // Tạo token giả lập (Base64)
+        // [URL HARDENING V2]: Cung cấp song song id và uid
+        $uid = encodeId($id);
+        
         $token_data = [
             "id" => $id,
+            "uid" => $uid,
             "username" => $username,
+            "full_name" => $full_name,
             "role" => $role,
             "iat" => time()
         ];
@@ -39,12 +47,17 @@ if ($stmt->rowCount() > 0) {
 
         http_response_code(200);
         echo json_encode(array(
+            "status" => "success",
             "message" => "Đăng nhập thành công.",
             "token" => $token,
             "user" => [
                 "id" => $id,
+                "uid" => $uid,
                 "username" => $username,
-                "role" => $role
+                "full_name" => $full_name,
+                "role" => $role,
+                "avatar_image" => $avatar_image,
+                "cover_image" => $cover_image
             ]
         ));
     } else {

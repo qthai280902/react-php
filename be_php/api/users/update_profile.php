@@ -47,9 +47,11 @@ function upload_image($file_input, $upload_dir) {
         $mime_type = finfo_file($finfo, $file_tmp);
         finfo_close($finfo);
         
-        if (strpos($mime_type, 'image/') !== 0) throw new Exception("Chỉ cho phép upload định dạng hình ảnh.");
+        // CHẶN CỨNG: Chỉ cho phép JPG/JPEG
+        if ($mime_type !== 'image/jpeg') throw new Exception("Định dạng file không hợp lệ. Chỉ chấp nhận ảnh JPG/JPEG.");
         
         $ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+        if ($ext !== 'jpg' && $ext !== 'jpeg') throw new Exception("Phần mở rộng file không hợp lệ. Chỉ chấp nhận .jpg hoặc .jpeg.");
         // Random file name chống path traversal
         $new_name = uniqid($file_input . '_') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
         $target_path = $upload_dir . $new_name;
