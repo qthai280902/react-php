@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Máy chủ: 127.0.0.1
--- Thời gian đã tạo: Th4 16, 2026 lúc 12:31 AM
+-- Thời gian đã tạo: Th4 17, 2026 lúc 11:43 AM
 -- Phiên bản máy phục vụ: 10.4.32-MariaDB
 -- Phiên bản PHP: 8.2.12
 
@@ -520,7 +520,7 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`id`, `username`, `password`, `full_name`, `avatar_image`, `cover_image`, `created_at`, `role`) VALUES
 (1, 'admin', '$2y$10$O9y8B.0707H36Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6Y6', NULL, NULL, NULL, '2026-04-09 17:25:19', 'admin'),
-(2, 'admin2', '$2y$10$GZycq3hCZkMlrIiIyPFnD.QVqIzehA4/n/AnaLYgGeU/Gjul6Hyr2', 'Nguyễn Quốc Thái', NULL, 'cover_image_69e00b187c805_663298ea.jpg', '2026-04-09 18:05:45', 'admin'),
+(2, 'admin2', '$2y$10$GZycq3hCZkMlrIiIyPFnD.QVqIzehA4/n/AnaLYgGeU/Gjul6Hyr2', '', NULL, 'cover_image_69e00b187c805_663298ea.jpg', '2026-04-09 18:05:45', 'admin'),
 (3, 'u1', '$2y$10$vPmL0VrH1CKPFX6xjXuU0ekPp4MSEXUa0Utpd8wT0XQ6cJm4E22hq', NULL, NULL, NULL, '2026-04-10 14:52:42', 'user'),
 (4, 'user1', '$2y$10$YWVyb25hdXRpY3MAAAAAAOHqG3xI6sFPnMO0Q4nFQnAGf5XYHKUy6', NULL, NULL, NULL, '2026-04-14 20:49:44', 'user'),
 (5, 'dev_pro', '$2y$10$YWVyb25hdXRpY3MAAAAAAOHqG3xI6sFPnMO0Q4nFQnAGf5XYHKUy6', NULL, NULL, NULL, '2026-04-14 20:49:44', 'user'),
@@ -631,6 +631,20 @@ INSERT INTO `users` (`id`, `username`, `password`, `full_name`, `avatar_image`, 
 (110, 'bot_fan_100', 'hidden_pass', NULL, NULL, NULL, '2026-04-14 22:39:02', 'user'),
 (10211, 'user4', '$2y$10$UjghDFRXrbwf1FmJxPhgtO0zt8qofjvR9zIEPBqvO6j6CTp8ZbYXy', NULL, NULL, NULL, '2026-04-15 09:43:19', 'user');
 
+-- --------------------------------------------------------
+
+--
+-- Cấu trúc bảng cho bảng `user_name_history`
+--
+
+CREATE TABLE `user_name_history` (
+  `id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `old_name` varchar(255) DEFAULT NULL,
+  `new_name` varchar(255) NOT NULL,
+  `changed_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 --
 -- Chỉ mục cho các bảng đã đổ
 --
@@ -714,6 +728,13 @@ ALTER TABLE `users`
   ADD UNIQUE KEY `username` (`username`);
 
 --
+-- Chỉ mục cho bảng `user_name_history`
+--
+ALTER TABLE `user_name_history`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_name_history_user_id` (`user_id`);
+
+--
 -- AUTO_INCREMENT cho các bảng đã đổ
 --
 
@@ -758,6 +779,12 @@ ALTER TABLE `tags`
 --
 ALTER TABLE `users`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10212;
+
+--
+-- AUTO_INCREMENT cho bảng `user_name_history`
+--
+ALTER TABLE `user_name_history`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- Các ràng buộc cho các bảng đã đổ
@@ -817,6 +844,12 @@ ALTER TABLE `reposts`
   ADD CONSTRAINT `reposts_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `reposts_ibfk_2` FOREIGN KEY (`post_id`) REFERENCES `posts` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `reposts_ibfk_3` FOREIGN KEY (`origin_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Các ràng buộc cho bảng `user_name_history`
+--
+ALTER TABLE `user_name_history`
+  ADD CONSTRAINT `fk_name_history_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
