@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
-import { Heart, Repeat2, MessageSquare, Star, ChevronLeft, ChevronRight, Hash } from 'lucide-react';
+import { Heart, Repeat2, MessageSquare, Star, ChevronLeft, ChevronRight, Hash, Search, X, Newspaper } from 'lucide-react';
 
 const PostList = () => {
     const [posts, setPosts] = useState([]);
@@ -12,29 +12,41 @@ const PostList = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [sortType, setSortType] = useState('newest'); 
     const [pagination, setPagination] = useState({ total_pages: 1, total_posts: 0 });
+    const [searchKeyword, setSearchKeyword] = useState('');
     
     const token = localStorage.getItem('token');
     const postsPerPage = 5;
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [tagFilter, sortType]);
+    }, [tagFilter, sortType, searchKeyword]);
 
+    // Debounce fetch
     useEffect(() => {
-        fetchPosts();
-    }, [tagFilter, sortType, currentPage]);
+        const timer = setTimeout(() => {
+            fetchPosts();
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [tagFilter, sortType, currentPage, searchKeyword]);
 
     const fetchPosts = async () => {
         setLoading(true);
         try {
-            const url = `/api/posts/read_public.php?tag=${tagFilter}&page=${currentPage}&limit=${postsPerPage}&sort=${sortType}`;
-            const res = await axiosClient.get(url);
-            setPosts(res.data);
-            setPagination(res.pagination);
-            setLoading(false);
+            const params = new URLSearchParams();
+            if (tagFilter)              params.append('tag', tagFilter);
+            if (searchKeyword.trim())   params.append('keyword', searchKeyword.trim());
+            params.append('page',  currentPage);
+            params.append('limit', postsPerPage);
+            params.append('sort',  sortType);
+
+            const res = await axiosClient.get(`/api/posts/read_public.php?${params.toString()}`);
+            setPosts(res.data || []);
+            setPagination(res.pagination || { total_pages: 1, total_posts: 0 });
             window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (err) {
             console.error(err);
+            setPosts([]);
+        } finally {
             setLoading(false);
         }
     };
@@ -112,27 +124,62 @@ const PostList = () => {
 
     return (
         <div className="space-y-8 pb-20">
-            {/* Sort Tabs UI */}
-            <div className="flex items-center justify-between bg-white p-2 rounded-[1.5rem] shadow-sm border border-slate-100 mb-8 overflow-hidden">
-                <div className="flex space-x-1">
-                    {[
-                        { id: 'newest', label: 'Mới nhất' },
-                        { id: 'top_rated', label: 'Hay nhất' },
-                        { id: 'hot', label: 'Sôi nổi' }
-                    ].map((tab) => (
+
+            {/* ═══ SEARCH BAR + SORT TABS ═══ */}
+            <div className="bg-white p-3 rounded-[1.5rem] shadow-sm border border-slate-100 mb-8">
+                {/* Search Input */}
+                <div className="relative mb-3">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Search size={16} className="text-slate-400" strokeWidth={1.5} />
+                    </div>
+                    <input
+                        type="text"
+                        value={searchKeyword}
+                        onChange={e => setSearchKeyword(e.target.value)}
+                        placeholder="Tìm kiếm bài viết theo tiêu đề hoặc nội dung..."
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl pl-11 pr-10 py-3 text-sm text-slate-700 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                    />
+                    {searchKeyword && (
                         <button
-                            key={tab.id}
-                            onClick={() => setSortType(tab.id)}
-                            className={`px-6 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 ${sortType === tab.id ? 'bg-slate-900 text-white shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                            onClick={() => setSearchKeyword('')}
+                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
                         >
-                            {tab.label}
+                            <X size={16} strokeWidth={1.5} />
                         </button>
-                    ))}
+                    )}
                 </div>
-                <div className="px-4 text-[10px] font-black text-slate-300 uppercase tracking-widest hidden md:block">
-                    Total: {pagination.total_posts} Nodes
+
+                {/* Sort Tabs */}
+                <div className="flex items-center justify-between">
+                    <div className="flex space-x-1">
+                        {[
+                            { id: 'newest', label: 'Mới nhất' },
+                            { id: 'top_rated', label: 'Hay nhất' },
+                            { id: 'hot', label: 'Sôi nổi' }
+                        ].map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setSortType(tab.id)}
+                                className={`px-6 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 ${sortType === tab.id ? 'bg-slate-900 text-white shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="px-4 text-[10px] font-black text-slate-300 uppercase tracking-widest hidden md:block">
+                        Total: {pagination.total_posts} Nodes
+                    </div>
                 </div>
             </div>
+
+            {/* Search result indicator */}
+            {searchKeyword.trim() && (
+                <div className="flex items-center space-x-2 text-slate-500 mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100 animate-in fade-in slide-in-from-left duration-500">
+                    <span className="font-bold flex items-center gap-1 mt-0.5"><Search size={14} strokeWidth={2} /> Kết quả cho:</span>
+                    <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-black shadow-sm">&quot;{searchKeyword.trim()}&quot;</span>
+                    <button onClick={() => setSearchKeyword('')} className="text-blue-600 hover:underline text-[10px] font-black uppercase tracking-widest ml-4 no-underline">Xóa</button>
+                </div>
+            )}
 
             {tagFilter && (
                 <div className="flex items-center space-x-2 text-slate-500 mb-6 bg-blue-50 p-4 rounded-xl border border-blue-100 animate-in fade-in slide-in-from-left duration-500">
@@ -147,85 +194,102 @@ const PostList = () => {
                     {[1, 2, 3].map(n => <div key={n} className="h-48 bg-slate-100 rounded-[2.5rem] w-full"></div>)}
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
                     {posts.length > 0 ? (
                         posts.map((post) => (
-                            <article key={post.id} className="bg-white rounded-[2.5rem] overflow-hidden shadow-sm border border-slate-100 hover:shadow-2xl transition-all duration-500 group animate-in zoom-in-95 duration-500">
-                                <div className="md:flex">
-                                    <div className="md:w-1/3 h-48 md:h-auto overflow-hidden">
-                                        <img 
-                                            src={`https://picsum.photos/400/400?random=${post.id}`} 
-                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-90 group-hover:opacity-100"
-                                            alt={post.title}
-                                        />
+                            <article 
+                                key={post.id} 
+                                className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow group animate-in zoom-in-95 duration-500"
+                            >
+                                {/* ── THUMBNAIL (Nguyên tắc Image-First) ── */}
+                                <Link to={`/post/${post.id}`} className="block overflow-hidden relative w-full shrink-0">
+                                    {post.cover_image ? (
+                                        <div className="w-full aspect-video">
+                                            <img 
+                                                src={`http://localhost:8000/uploads/${post.cover_image}`}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 brightness-95 group-hover:brightness-100"
+                                                alt={post.title}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="w-full aspect-video bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-slate-100 transition-colors duration-500">
+                                            <Newspaper size={48} strokeWidth={1} />
+                                        </div>
+                                    )}
+                                    
+                                    {/* Tag Overlay */}
+                                    {post.tags && post.tags.length > 0 && (
+                                        <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md text-white px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-md">
+                                            {post.tags[0]}
+                                        </div>
+                                    )}
+                                </Link>
+
+                                {/* ── NỘI DUNG CONTENT ── */}
+                                <div className="flex-1 flex flex-col p-5">
+                                    {/* Meta data */}
+                                    <div className="flex items-center space-x-2 text-[11px] text-gray-500 mb-3 font-medium uppercase tracking-widest">
+                                        <Link to={`/profile/${post.author_id}`} className="font-bold text-slate-800 hover:text-blue-600 transition-colors no-underline">
+                                            @{post.author_name}
+                                        </Link>
+                                        <span>•</span>
+                                        <span className="font-mono">{new Date(post.created_at).toLocaleDateString()}</span>
                                     </div>
-                                    <div className="md:w-2/3 p-8 flex flex-col justify-between">
-                                        <div>
-                                            <div className="flex items-center justify-between mb-4">
-                                                <div className="flex items-center space-x-2 text-xs text-slate-400">
-                                                    <Link to={`/profile/${post.author_id}`} className="font-black text-slate-900 hover:text-blue-600 transition-colors no-underline">
-                                                        @{post.author_name}
-                                                    </Link>
-                                                    <span>•</span>
-                                                    <span className="font-mono text-[10px]">{new Date(post.created_at).toLocaleDateString()}</span>
-                                                </div>
-                                                <div className="flex items-center gap-1 text-amber-500 font-bold bg-amber-50 px-3 py-1 rounded-full text-[10px] border border-amber-100 shadow-sm shadow-amber-50">
-                                                    <Star size={10} fill="currentColor" strokeWidth={1.5} /> {post.avg_rating > 0 ? post.avg_rating : 'New'}
-                                                </div>
-                                            </div>
-                                            <Link to={`/post/${post.id}`} className="no-underline">
-                                                <h2 className="text-2xl font-black text-slate-900 mb-3 group-hover:text-blue-600 transition-colors leading-tight tracking-tight">{post.title}</h2>
-                                            </Link>
-                                            <p className="text-slate-500 line-clamp-2 leading-relaxed text-sm mb-4">{post.content}</p>
+                                    
+                                    {/* Title */}
+                                    <Link to={`/post/${post.id}`} className="no-underline block group-hover:text-blue-600 transition-colors">
+                                        <h2 className="text-xl font-bold text-slate-900 line-clamp-2 mb-2 hover:text-blue-600 cursor-pointer">
+                                            {post.title}
+                                        </h2>
+                                    </Link>
+                                    
+                                    {/* Excerpt */}
+                                    <p className="text-sm text-slate-600 line-clamp-2 mb-4">
+                                        {post.content}
+                                    </p>
+                                    
+                                    {/* ── INTERACTION FOOTER ── */}
+                                    <div className="mt-auto pt-4 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500">
+                                        <div className="flex items-center gap-1 text-amber-500 font-bold bg-amber-50/50 px-2 py-1 rounded-md text-[10px] border border-amber-100/50">
+                                            <Star size={12} fill="currentColor" strokeWidth={1.5} /> {post.avg_rating > 0 ? post.avg_rating : 'New'}
                                         </div>
                                         
-                                        <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                                            <div className="flex flex-wrap gap-2">
-                                                {post.tags.map(tag => (
-                                                    <Link 
-                                                        key={tag} 
-                                                        to={`/?tag=${tag}`}
-                                                        className="text-[10px] font-black text-slate-400 hover:text-blue-600 transition-colors no-underline uppercase tracking-tighter"
-                                                    >
-                                                        #{tag}
-                                                    </Link>
-                                                ))}
-                                            </div>
-                                            
-                                            <div className="flex items-center space-x-5">
-                                                <button 
-                                                    onClick={() => handleLike(post.id)}
-                                                    className={`flex items-center space-x-1.5 transition-all group/btn active:scale-90 ${post.liked ? 'text-red-500' : 'text-slate-300 hover:text-red-400'}`}
-                                                >
-                                                    <Heart size={20} fill={post.liked ? "currentColor" : "none"} strokeWidth={1.5} />
-                                                    <span className="text-xs font-black font-mono">{post.total_likes || 0}</span>
-                                                </button>
+                                        <div className="flex items-center space-x-4">
+                                            <button 
+                                                onClick={() => handleLike(post.id)}
+                                                className={`flex items-center gap-1.5 transition-colors group/btn ${post.liked ? 'text-red-500' : 'hover:text-blue-600'}`}
+                                            >
+                                                <Heart size={16} fill={post.liked ? "currentColor" : "none"} strokeWidth={1.5} />
+                                                <span className="font-medium">{post.total_likes || 0}</span>
+                                            </button>
 
-                                                <button 
-                                                    onClick={() => handleRepost(post.id)}
-                                                    className={`flex items-center space-x-1.5 transition-all active:scale-90 ${post.reposted ? 'text-green-500' : 'text-slate-300 hover:text-green-400'}`}
-                                                >
-                                                    <Repeat2 size={20} strokeWidth={1.5} />
-                                                    <span className="text-[10px] font-black uppercase tracking-tighter">{post.reposted ? 'Shared' : 'Share'}</span>
-                                                </button>
-                                                
-                                                <Link to={`/post/${post.id}`} className="flex items-center space-x-1.5 text-slate-300 hover:text-blue-500 transition-colors no-underline active:scale-90">
-                                                    <MessageSquare size={20} strokeWidth={1.5} />
-                                                    <span className="text-xs font-black font-mono">{post.total_comments || 0}</span>
-                                                </Link>
-                                            </div>
+                                            <button 
+                                                onClick={() => handleRepost(post.id)}
+                                                className={`flex items-center gap-1.5 transition-colors ${post.reposted ? 'text-green-500' : 'hover:text-blue-600'}`}
+                                            >
+                                                <Repeat2 size={16} strokeWidth={1.5} />
+                                            </button>
+                                            
+                                            <Link to={`/post/${post.id}#comments`} className="flex items-center gap-1.5 hover:text-blue-600 transition-colors no-underline">
+                                                <MessageSquare size={16} strokeWidth={1.5} />
+                                                <span className="font-medium">{post.total_comments || 0}</span>
+                                            </Link>
                                         </div>
                                     </div>
                                 </div>
                             </article>
                         ))
                     ) : (
-                        <div className="text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 text-slate-400 font-mono text-xs uppercase tracking-widest">
+                        <div className="col-span-full text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 font-mono text-xs uppercase tracking-widest">
                             No content found for this criteria.
                         </div>
                     )}
 
-                    {posts.length > 0 && renderPagination()}
+                    {posts.length > 0 && (
+                        <div className="col-span-full">
+                            {renderPagination()}
+                        </div>
+                    )}
                 </div>
             )}
         </div>

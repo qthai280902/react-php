@@ -1,35 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LogOut, User, PlusSquare, LayoutDashboard, Menu, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [user, setUser] = useState(null);
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Lấy thông tin user từ localStorage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-
-    // Lắng nghe sự kiện login/logout
-    const handleAuthChange = () => {
-      const updatedUser = localStorage.getItem('user');
-      setUser(updatedUser ? JSON.parse(updatedUser) : null);
-    };
-
-    window.addEventListener('storage', handleAuthChange);
-    return () => window.removeEventListener('storage', handleAuthChange);
+    // Removed old local storage logic since AuthContext manages it globally
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
+    logout();
     navigate('/login');
-    window.dispatchEvent(new Event('storage'));
   };
 
   return (
@@ -58,10 +43,14 @@ const Navbar = () => {
                 )}
                 <div className="flex items-center space-x-4 pl-4 border-l border-slate-200">
                   <Link to={`/profile/${user.id}`} className="flex items-center space-x-2 text-slate-900 hover:text-blue-600 transition-colors no-underline">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                      <User size={14} strokeWidth={2.5} />
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 overflow-hidden shadow-sm">
+                      {user.avatar_image ? (
+                        <img src={`http://localhost:8000/uploads/${user.avatar_image}`} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={14} strokeWidth={2.5} />
+                      )}
                     </div>
-                    <span className="normal-case">Chào, {user.username}</span>
+                    <span className="normal-case font-bold">{user?.full_name || user?.username}</span>
                   </Link>
                   <button 
                     onClick={handleLogout} 
@@ -93,6 +82,11 @@ const Navbar = () => {
               <Link to="/create" className="flex items-center gap-3 font-bold text-slate-600 no-underline px-4 py-2">
                 <PlusSquare size={20} strokeWidth={1.5} /> Viết bài
               </Link>
+              {user.role === 'admin' && (
+                <Link to="/sys-control-0x2026" className="flex items-center gap-3 font-bold text-purple-600 no-underline px-4 py-2">
+                  <LayoutDashboard size={20} strokeWidth={1.5} /> Dashboard Admin
+                </Link>
+              )}
               <Link to={`/profile/${user.id}`} className="flex items-center gap-3 font-bold text-slate-900 no-underline px-4 py-2">
                 <User size={20} strokeWidth={1.5} /> Hồ sơ cá nhân
               </Link>

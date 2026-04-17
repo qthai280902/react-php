@@ -1,7 +1,5 @@
 <?php
 // Gửi các Header cần thiết (đã có trong database.php nhưng cứ để đây cho chắc chắn hoặc thay đổi nếu cần)
-header("Access-Control-Allow-Origin: *");
-header("Content-Type: application/json; charset=UTF-8");
 
 include_once '../../config/database.php';
 

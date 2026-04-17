@@ -1,6 +1,4 @@
 <?php
-header("Access-Control-Allow-Origin: *");
-header("Content-Type: application/json; charset=UTF-8");
 
 include_once '../../config/database.php';
 
@@ -20,7 +18,8 @@ $query = "SELECT
             c.content, 
             c.created_at, 
             u.id as user_id,
-            u.username 
+            u.username,
+            (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers
           FROM comments c
           INNER JOIN users u ON c.user_id = u.id
           WHERE c.post_id = ?

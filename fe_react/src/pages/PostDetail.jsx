@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
-import { Heart, Repeat2, Star, Trash2, ArrowLeft, Send } from 'lucide-react';
+import { Heart, Repeat2, Star, Trash2, ArrowLeft, Send, X } from 'lucide-react';
+import UserBadge from '../components/UserBadge';
 
 const PostDetail = () => {
     const { id } = useParams();
@@ -17,8 +18,12 @@ const PostDetail = () => {
     const [likeCount, setLikeCount] = useState(0);
     const [reposted, setReposted] = useState(false);
 
+    // Lightbox state cho gallery
+    const [lightboxImg, setLightboxImg] = useState(null);
+
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
     const token = localStorage.getItem('token');
+    const isAdmin = currentUser.role === 'admin';
     const isPostOwner = post && post.author_id == currentUser.id;
 
     useEffect(() => {
@@ -51,7 +56,7 @@ const PostDetail = () => {
         try {
             const res = await axiosClient.post('/api/comments/create.php', 
                 { post_id: id, content: newComment },
-                { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } }
+                { headers: { 'Authorization': 'Bearer ' + token } }
             );
             const newCommentObj = { ...res.comment, user_id: currentUser.id };
             setComments([newCommentObj, ...comments]);
@@ -63,12 +68,20 @@ const PostDetail = () => {
         }
     };
 
+    const canDeleteComment = (comment) => {
+        if (!currentUser.id) return false;
+        if (isAdmin) return true;
+        if (comment.user_id == currentUser.id) return true;
+        if (isPostOwner) return true;
+        return false;
+    };
+
     const handleDeleteComment = async (commentId) => {
         if (!window.confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
         try {
             await axiosClient.post('/api/comments/delete.php', 
                 { id: commentId },
-                { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } }
+                { headers: { 'Authorization': 'Bearer ' + token } }
             );
             setComments(comments.filter(c => c.id !== commentId));
         } catch (err) {
@@ -81,7 +94,7 @@ const PostDetail = () => {
         try {
             const res = await axiosClient.post('/api/ratings/rate.php', 
                 { post_id: id, stars },
-                { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } }
+                { headers: { 'Authorization': 'Bearer ' + token } }
             );
             setUserRating(stars);
             setPost({...post, avg_rating: res.new_avg});
@@ -96,7 +109,7 @@ const PostDetail = () => {
         try {
             const res = await axiosClient.post('/api/social/like.php', 
                 { post_id: id },
-                { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } }
+                { headers: { 'Authorization': 'Bearer ' + token } }
             );
             setLiked(res.status === 'liked');
             setLikeCount(res.total_likes);
@@ -110,7 +123,7 @@ const PostDetail = () => {
         try {
             const res = await axiosClient.post('/api/social/repost.php', 
                 { post_id: id },
-                { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } }
+                { headers: { 'Authorization': 'Bearer ' + token } }
             );
             setReposted(res.status === 'reposted');
             alert(res.message);
@@ -122,6 +135,8 @@ const PostDetail = () => {
     if (loading) return <div className="text-center py-20 font-mono text-cyan-600 animate-pulse uppercase tracking-widest text-sm">Synchronizing Node Data...</div>;
     if (!post) return <div className="text-center py-20 font-bold text-red-500 uppercase tracking-widest">404: Node Not Found</div>;
 
+    const gallery = post.gallery || [];
+
     return (
         <article className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
             <header className="mb-10">
@@ -129,7 +144,7 @@ const PostDetail = () => {
                     <ArrowLeft size={16} strokeWidth={1.5} className="group-hover:-translate-x-1 transition-transform" /> Back to Feed
                 </Link>
                 <div className="flex flex-wrap gap-2 mb-6">
-                    {post.tags.map(tag => (
+                    {(post.tags || []).map(tag => (
                         <Link key={tag} to={`/?tag=${tag}`} className="text-blue-600 font-black text-[10px] uppercase bg-blue-50 px-4 py-1.5 rounded-full border border-blue-100 no-underline tracking-widest">
                             #{tag}
                         </Link>
@@ -137,25 +152,74 @@ const PostDetail = () => {
                 </div>
                 <h1 className="text-4xl md:text-5xl font-black text-slate-900 leading-tight mb-8 tracking-tighter">{post.title}</h1>
                 <div className="flex items-center space-x-6 text-slate-400">
-                    <Link to={`/profile/${post.author_id}`} className="flex items-center group no-underline">
-                        <div className="w-10 h-10 rounded-2xl bg-slate-900 mr-3 flex items-center justify-center font-black text-white group-hover:bg-blue-600 transition-colors uppercase">
+                    <Link to={`/profile/${post.author_id}`} className="flex items-center group no-underline gap-1">
+                        <div className="w-10 h-10 rounded-2xl bg-slate-900 mr-2 flex items-center justify-center font-black text-white group-hover:bg-blue-600 transition-colors uppercase">
                             {post.author_name[0]}
                         </div>
                         <span className="font-black text-slate-900 group-hover:text-blue-600 transition-colors uppercase text-sm tracking-tight">@{post.author_name}</span>
+                        <UserBadge followers={post.author_followers || 0} size={16} />
                     </Link>
                     <span className="text-xs font-mono">{new Date(post.created_at).toLocaleDateString('vi-VN', { dateStyle: 'long' })}</span>
                 </div>
             </header>
 
-            <div className="rounded-[3rem] overflow-hidden shadow-2xl mb-12 border-[12px] border-white ring-1 ring-slate-100">
-                <img src={`https://picsum.photos/1200/600?random=${post.id}`} className="w-full object-cover" alt={post.title} />
-            </div>
+            {/* ── ẢNH BÌA: Chỉ render khi có cover_image ── */}
+            {post.cover_image && (
+                <div className="rounded-[3rem] overflow-hidden shadow-2xl mb-12 border-[12px] border-white ring-1 ring-slate-100">
+                    <img src={`http://localhost:8000/uploads/${post.cover_image}`} className="w-full object-cover" alt={post.title} />
+                </div>
+            )}
 
-            <div className="prose prose-lg prose-slate max-w-none text-slate-800 leading-[1.8] text-justify mb-16 px-4">
+            {/* ── NỘI DUNG BÀI VIẾT ── */}
+            <div className="prose prose-lg prose-slate max-w-none text-slate-800 leading-[1.8] text-justify mb-12 px-4 whitespace-pre-line">
                 {post.content}
             </div>
 
-            {/* Interaction Row: Rating, Like, Repost */}
+            {/* ── GALLERY ẢNH PHỤ ── */}
+            {gallery.length > 0 && (
+                <div className="mb-16 px-4">
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Attached Media ({gallery.length})</h3>
+                    <div className={`grid gap-3 ${
+                        gallery.length === 1 ? 'grid-cols-1' :
+                        gallery.length === 2 ? 'grid-cols-2' :
+                        'grid-cols-2 md:grid-cols-3'
+                    }`}>
+                        {gallery.map((img, idx) => (
+                            <div
+                                key={img.id || idx}
+                                className="rounded-2xl overflow-hidden border border-slate-100 shadow-sm cursor-pointer group relative aspect-square hover:shadow-xl transition-all duration-500"
+                                onClick={() => setLightboxImg(`http://localhost:8000/uploads/${img.image_url}`)}
+                            >
+                                <img
+                                    src={`http://localhost:8000/uploads/${img.image_url}`}
+                                    alt={`Gallery ${idx + 1}`}
+                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                                    <span className="opacity-0 group-hover:opacity-100 text-white text-[10px] font-black uppercase tracking-widest bg-black/50 px-4 py-2 rounded-full transition-all">
+                                        Phóng to
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ── LIGHTBOX OVERLAY ── */}
+            {lightboxImg && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 animate-in fade-in duration-300 cursor-pointer"
+                    onClick={() => setLightboxImg(null)}
+                >
+                    <button className="absolute top-6 right-6 text-white/70 hover:text-white transition-colors active:scale-90" onClick={() => setLightboxImg(null)}>
+                        <X size={32} strokeWidth={1.5} />
+                    </button>
+                    <img src={lightboxImg} alt="Full view" className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300" />
+                </div>
+            )}
+
+            {/* ── INTERACTION ROW ── */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
                 <div className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col justify-center">
                     <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Rating Stats</p>
@@ -221,6 +285,7 @@ const PostDetail = () => {
                 </div>
             </div>
 
+            {/* ── COMMENTS SECTION ── */}
             <section className="border-t border-slate-100 pt-16">
                 <h2 className="text-3xl font-black text-slate-900 mb-10 uppercase tracking-tighter">Bình luận ({comments.length})</h2>
                 <div className="bg-slate-900 rounded-[2.5rem] p-10 mb-12 shadow-2xl relative overflow-hidden group">
@@ -256,19 +321,27 @@ const PostDetail = () => {
                         <div key={comment.id} className="flex space-x-6 group/item animate-in fade-in slide-in-from-left duration-500">
                             <Link to={`/profile/${comment.user_id}`} className="flex-shrink-0 no-underline">
                                 <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center font-black text-slate-300 text-xl border border-slate-50 transition-all group-hover/item:bg-blue-600 group-hover/item:text-white group-hover/item:shadow-xl group-hover/item:shadow-blue-200">
-                                    {comment.username[0].toUpperCase()}
+                                    {comment.username?.[0]?.toUpperCase() || '?'}
                                 </div>
                             </Link>
                             <div className="flex-1">
                                 <div className="bg-white rounded-[2rem] p-8 border border-slate-50 shadow-sm relative group hover:shadow-lg transition-all duration-500">
                                     <div className="flex items-center justify-between mb-3">
-                                        <Link to={`/profile/${comment.user_id}`} className="font-black text-slate-900 hover:text-blue-600 no-underline text-lg uppercase tracking-tight">@{comment.username}</Link>
+                                        <div className="flex items-center gap-2">
+                                            <Link to={`/profile/${comment.user_id}`} className="font-black text-slate-900 hover:text-blue-600 no-underline text-lg uppercase tracking-tight">
+                                                @{comment.username}
+                                            </Link>
+                                            {comment.followers !== undefined && (
+                                                <UserBadge followers={comment.followers || 0} size={14} />
+                                            )}
+                                        </div>
                                         <div className="flex items-center space-x-4">
                                             <span className="text-[10px] text-slate-300 font-mono italic uppercase">{comment.created_at}</span>
-                                            {(isPostOwner || comment.user_id == currentUser.id) && (
+                                            {canDeleteComment(comment) && (
                                                 <button 
                                                     onClick={() => handleDeleteComment(comment.id)} 
                                                     className="text-red-300 hover:text-red-500 transition-all active:scale-90 p-1"
+                                                    title={isAdmin ? 'Xóa (Admin)' : 'Xóa bình luận'}
                                                 >
                                                     <Trash2 size={18} strokeWidth={1.5} />
                                                 </button>

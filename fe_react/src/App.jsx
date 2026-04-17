@@ -15,10 +15,13 @@ import Dashboard from './pages/admin/Dashboard';
 import AdminPosts from './pages/admin/AdminPosts';
 import AdminUsers from './pages/admin/AdminUsers';
 import ProtectedRoute from './components/ProtectedRoute';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   return (
-    <Router>
+    <>
+      <Toaster position="top-right" toastOptions={{ duration: 3000, style: { fontWeight: 'bold' } }} />
+      <Router>
       <div className="App min-h-screen bg-slate-50">
         <Routes>
           {/* Public Area */}
@@ -41,6 +44,7 @@ function App() {
         </Routes>
       </div>
     </Router>
+    </>
   );
 }
 

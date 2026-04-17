@@ -49,7 +49,7 @@ const Login = () => {
                         {isRegister ? 'Khởi tạo tài khoản' : 'Truy cập hệ thống'}
                     </h2>
                     <p className="text-slate-400 text-sm font-medium uppercase tracking-widest">
-                        {isRegister ? 'Join our community' : 'Welcome back agent'}
+                        {isRegister ? 'Đăng ký thành viên' : 'Chào mừng trở lại'}
                     </p>
                 </div>
                 
@@ -106,8 +106,8 @@ const Login = () => {
                 </div>
             </div>
             
-            <div className="mt-8 text-center text-[10px] text-slate-300 font-mono uppercase tracking-[0.3em]">
-                Secured Login Portal v2.0
+            <div className="mt-8 text-center text-xs text-slate-400 font-medium uppercase tracking-widest">
+                Hệ thống Đăng nhập
             </div>
         </div>
     );

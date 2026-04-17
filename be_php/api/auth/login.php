@@ -1,8 +1,4 @@
 <?php
-header("Access-Control-Allow-Origin: *");
-header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Methods: POST");
-header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
 include_once '../../config/database.php';
 
@@ -19,7 +15,7 @@ if (empty($data->username) || empty($data->password)) {
 }
 
 // Tìm user theo username
-$query = "SELECT id, username, password FROM users WHERE username = ? LIMIT 1";
+$query = "SELECT id, username, password, role FROM users WHERE username = ? LIMIT 1";
 $stmt = $db->prepare($query);
 $stmt->execute([$data->username]);
 
@@ -28,6 +24,7 @@ if ($stmt->rowCount() > 0) {
     $id = $row['id'];
     $username = $row['username'];
     $hashed_password = $row['password'];
+    $role = $row['role'];
 
     // Kiểm tra mật khẩu
     if (password_verify($data->password, $hashed_password)) {
@@ -35,6 +32,7 @@ if ($stmt->rowCount() > 0) {
         $token_data = [
             "id" => $id,
             "username" => $username,
+            "role" => $role,
             "iat" => time()
         ];
         $token = base64_encode(json_encode($token_data));
@@ -45,7 +43,8 @@ if ($stmt->rowCount() > 0) {
             "token" => $token,
             "user" => [
                 "id" => $id,
-                "username" => $username
+                "username" => $username,
+                "role" => $role
             ]
         ));
     } else {

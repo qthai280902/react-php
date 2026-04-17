@@ -1,6 +1,4 @@
 <?php
-header("Access-Control-Allow-Origin: *");
-header("Content-Type: application/json; charset=UTF-8");
 
 include_once '../../config/database.php';
 
@@ -16,7 +14,7 @@ if (!$user_id) {
 }
 
 // 1. Lấy thông tin cơ bản của User
-$user_query = "SELECT id, username, created_at FROM users WHERE id = ?";
+$user_query = "SELECT id, username, full_name, role, avatar_image, cover_image, created_at FROM users WHERE id = ?";
 $stmt_user = $db->prepare($user_query);
 $stmt_user->execute([$user_id]);
 $user_info = $stmt_user->fetch(PDO::FETCH_ASSOC);
@@ -52,6 +50,10 @@ http_response_code(200);
 echo json_encode(array(
     "id" => $user_info['id'],
     "username" => $user_info['username'],
+    "full_name" => $user_info['full_name'],
+    "role" => $user_info['role'],
+    "avatar_image" => $user_info['avatar_image'],
+    "cover_image" => $user_info['cover_image'],
     "created_at" => $user_info['created_at'],
     "stats" => [
         "followers" => (int)$followers_count,

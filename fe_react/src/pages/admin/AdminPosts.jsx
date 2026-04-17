@@ -1,171 +1,190 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
+import { Search, User, Calendar, Hash, Trash2, Heart, MessageSquare, Star, X } from 'lucide-react';
 
 const AdminPosts = () => {
     const [posts, setPosts] = useState([]);
-    const [filteredPosts, setFilteredPosts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filters, setFilters] = useState({
-        keyword: '',
-        author: '',
-        date: '',
-        hashtag: ''
-    });
 
-    useEffect(() => {
-        fetchPosts();
-    }, []);
+    const [keyword,  setKeyword]  = useState('');
+    const [author,   setAuthor]   = useState('');
+    const [hashtag,  setHashtag]  = useState('');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo,   setDateTo]   = useState('');
 
-    useEffect(() => {
-        applyFilters();
-    }, [filters, posts]);
-
-    const fetchPosts = async () => {
+    const fetchPosts = useCallback(async () => {
+        setLoading(true);
         try {
-            const data = await axiosClient.get('/api/posts/read.php');
-            setPosts(data);
-            setLoading(false);
+            const params = new URLSearchParams();
+            if (keyword.trim())  params.append('keyword',   keyword.trim());
+            if (author.trim())   params.append('author',    author.trim());
+            if (hashtag.trim())  params.append('hashtag',   hashtag.trim());
+            if (dateFrom)        params.append('date_from', dateFrom);
+            if (dateTo)          params.append('date_to',   dateTo);
+
+            const qs = params.toString();
+            const url = `/api/admin/read_posts.php${qs ? '?' + qs : ''}`;
+
+            // axiosClient interceptor tự unwrap response.data
+            // backend trả về mảng trực tiếp []
+            const data = await axiosClient.get(url);
+            setPosts(Array.isArray(data) ? data : []);
         } catch (err) {
-            console.error('Error:', err);
+            console.error('AdminPosts fetch error:', err);
+            setPosts([]);
+        } finally {
             setLoading(false);
         }
-    };
+    }, [keyword, author, hashtag, dateFrom, dateTo]);
 
-    const applyFilters = () => {
-        let result = posts;
-        if (filters.keyword) {
-            result = result.filter(p => p.title.toLowerCase().includes(filters.keyword.toLowerCase()));
-        }
-        if (filters.author) {
-            result = result.filter(p => p.author_name.toLowerCase().includes(filters.author.toLowerCase()));
-        }
-        if (filters.date) {
-            result = result.filter(p => p.created_at.startsWith(filters.date));
-        }
-        // Hashtag filter logic (giả lập vì DB hiện tại chưa có tags trả về trực tiếp trong read.php)
-        if (filters.hashtag) {
-            result = result.filter(p => p.title.toLowerCase().includes(filters.hashtag.toLowerCase()));
-        }
-        setFilteredPosts(result);
-    };
+    // Debounce 450ms
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchPosts();
+        }, 450);
+        return () => clearTimeout(timer);
+    }, [fetchPosts]);
 
-    const handleDelete = async (id) => {
-        if (window.confirm('Xác nhận xóa bản ghi từ hệ thống?')) {
-            try {
-                await axiosClient.post('/api/posts/delete.php', { id });
-                setPosts(posts.filter(post => post.id !== id));
-            } catch (err) {
-                alert('LỖI: Truy cập cơ sở dữ liệu thất bại.');
-            }
+    const handleDelete = async (id, title) => {
+        if (!window.confirm(`Xác nhận xóa bài viết:\n"${title}"\n\nHành động này KHÔNG thể hoàn tác!`)) return;
+        try {
+            await axiosClient.post('/api/posts/soft_delete.php', { post_id: id });
+            setPosts(prev => prev.filter(p => p.id !== id));
+        } catch (err) {
+            alert(err?.response?.data?.message || 'Lỗi khi xóa bài viết.');
         }
     };
 
-    if (loading) return <div className="text-cyan-500 font-mono animate-pulse">INITIATING DATA RETRIEVAL...</div>;
+    const clearFilters = () => {
+        setKeyword(''); setAuthor(''); setHashtag(''); setDateFrom(''); setDateTo('');
+    };
+    const hasFilter = keyword || author || hashtag || dateFrom || dateTo;
 
     return (
-        <div className="space-y-8">
-            <div className="flex justify-between items-end">
+        <div className="space-y-8 animate-in fade-in duration-500">
+
+            {/* ── HEADER ── */}
+            <div className="flex items-end justify-between">
                 <div>
-                    <h1 className="text-3xl font-black text-white tracking-tight uppercase">Quản lý bài viết</h1>
-                    <p className="text-cyan-500/50 font-mono text-xs uppercase mt-1">Total Records: {filteredPosts.length}</p>
+                    <h1 className="text-3xl font-black text-white uppercase tracking-tight">Quản lý bài viết</h1>
+                    <p className="text-cyan-500/50 font-mono text-xs uppercase mt-1">
+                        Records found: <span className="text-cyan-400 font-black">{posts.length}</span>
+                    </p>
+                </div>
+                {hasFilter && (
+                    <button onClick={clearFilters}
+                        className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-red-400 bg-red-500/5 border border-red-500/20 rounded-xl hover:bg-red-500/10 transition-all active:scale-95"
+                    >
+                        <X size={12} strokeWidth={2} /> Xóa bộ lọc
+                    </button>
+                )}
+            </div>
+
+            {/* ── FILTER TOOLBAR ── */}
+            <div className="bg-slate-900/60 border border-cyan-500/10 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 backdrop-blur-sm">
+                <div className="lg:col-span-2 space-y-1.5">
+                    <label className="flex items-center gap-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        <Search size={10} strokeWidth={2} /> Tìm tiêu đề
+                    </label>
+                    <input type="text" value={keyword} onChange={e => setKeyword(e.target.value)}
+                        placeholder="Gõ từ khóa..."
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500/60 rounded-xl px-4 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none transition-colors" />
+                </div>
+                <div className="space-y-1.5">
+                    <label className="flex items-center gap-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        <User size={10} strokeWidth={2} /> Tác giả
+                    </label>
+                    <input type="text" value={author} onChange={e => setAuthor(e.target.value)}
+                        placeholder="@username..."
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500/60 rounded-xl px-4 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none transition-colors" />
+                </div>
+                <div className="space-y-1.5">
+                    <label className="flex items-center gap-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        <Hash size={10} strokeWidth={2} /> Hashtag
+                    </label>
+                    <input type="text" value={hashtag} onChange={e => setHashtag(e.target.value)}
+                        placeholder="#tag..."
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500/60 rounded-xl px-4 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none transition-colors" />
+                </div>
+                <div className="lg:col-span-5 grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <label className="flex items-center gap-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            <Calendar size={10} strokeWidth={2} /> Từ ngày
+                        </label>
+                        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500/60 rounded-xl px-4 py-2.5 text-sm text-slate-300 outline-none transition-colors [color-scheme:dark]" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="flex items-center gap-1 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            <Calendar size={10} strokeWidth={2} /> Đến ngày
+                        </label>
+                        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500/60 rounded-xl px-4 py-2.5 text-sm text-slate-300 outline-none transition-colors [color-scheme:dark]" />
+                    </div>
                 </div>
             </div>
 
-            {/* Multi-Filter Search Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-900/50 p-6 rounded-2xl border border-cyan-500/10 backdrop-blur-sm">
-                <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Tìm theo tiêu đề</label>
-                    <input 
-                        type="text" 
-                        placeholder="Keyword..." 
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                        value={filters.keyword}
-                        onChange={(e) => setFilters({...filters, keyword: e.target.value})}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Lọc tác giả</label>
-                    <input 
-                        type="text" 
-                        placeholder="Author name..." 
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                        value={filters.author}
-                        onChange={(e) => setFilters({...filters, author: e.target.value})}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Lọc Hashtag</label>
-                    <input 
-                        type="text" 
-                        placeholder="#tag..." 
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-cyan-500/50 transition-colors"
-                        value={filters.hashtag}
-                        onChange={(e) => setFilters({...filters, hashtag: e.target.value})}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Lọc Ngày</label>
-                    <input 
-                        type="date" 
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 [color-scheme:dark] focus:outline-none focus:border-cyan-500/50 transition-colors"
-                        value={filters.date}
-                        onChange={(e) => setFilters({...filters, date: e.target.value})}
-                    />
-                </div>
-            </div>
-
-            {/* High-Tech Table */}
+            {/* ── DATA TABLE ── */}
             <div className="bg-slate-950 rounded-2xl border border-cyan-500/10 overflow-hidden shadow-2xl">
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-900/50 border-b border-cyan-500/10">
                         <tr>
-                            <th className="p-5 font-bold text-[11px] text-slate-400 uppercase tracking-widest">CID</th>
-                            <th className="p-5 font-bold text-[11px] text-slate-400 uppercase tracking-widest">Tiêu đề bản ghi</th>
-                            <th className="p-5 font-bold text-[11px] text-slate-400 uppercase tracking-widest">Authority</th>
-                            <th className="p-5 font-bold text-[11px] text-slate-400 uppercase tracking-widest">Metadata/Date</th>
-                            <th className="p-5 font-bold text-[11px] text-slate-400 uppercase tracking-widest text-center">Operation</th>
+                            <th className="p-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest w-16">ID</th>
+                            <th className="p-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">Tiêu đề</th>
+                            <th className="p-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">Tác giả</th>
+                            <th className="p-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">Tags</th>
+                            <th className="p-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">Stats</th>
+                            <th className="p-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">Ngày đăng</th>
+                            <th className="p-5 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">XÓA</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-cyan-500/5 text-sm">
-                        {filteredPosts.length > 0 ? (
-                            filteredPosts.map((post) => (
+                        {loading ? (
+                            <tr><td colSpan="7" className="p-16 text-center text-cyan-500 font-mono text-xs uppercase tracking-widest animate-pulse">Scanning database nodes...</td></tr>
+                        ) : posts.length === 0 ? (
+                            <tr><td colSpan="7" className="p-20 text-center text-slate-600 font-mono text-xs uppercase tracking-[0.2em] italic">NO RECORD MATCHES CURRENT QUERY</td></tr>
+                        ) : (
+                            posts.map(post => (
                                 <tr key={post.id} className="hover:bg-cyan-500/[0.02] transition-colors group">
-                                    <td className="p-5 text-cyan-500/70 font-mono text-xs">0x{post.id}</td>
-                                    <td className="p-5 text-slate-300 font-semibold group-hover:text-cyan-400 transition-colors">{post.title}</td>
-                                    <td className="p-5">
-                                        <div className="flex items-center space-x-2">
-                                            <div className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
-                                            <span className="text-slate-400 font-mono text-xs">{post.author_name}</span>
-                                        </div>
-                                    </td>
-                                    <td className="p-5 text-slate-500 font-mono text-xs italic">
-                                        {post.created_at}
+                                    <td className="p-5 font-mono text-xs text-cyan-500/60">#{post.id}</td>
+                                    <td className="p-5 max-w-[220px]">
+                                        <Link to={`/post/${post.id}`} target="_blank"
+                                            className="text-slate-300 font-semibold group-hover:text-cyan-400 transition-colors truncate block no-underline hover:underline">
+                                            {post.title}
+                                        </Link>
                                     </td>
                                     <td className="p-5">
-                                        <div className="flex justify-center space-x-3">
-                                            <button className="text-cyan-500 hover:text-cyan-400 p-2 bg-cyan-500/5 rounded-lg border border-cyan-500/20 hover:border-cyan-500/50 transition-all">
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                </svg>
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDelete(post.id)}
-                                                className="text-red-500 hover:text-red-400 p-2 bg-red-500/5 rounded-lg border border-red-500/20 hover:border-red-500/50 transition-all"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            </button>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_6px_#22c55e] flex-shrink-0" />
+                                            <span className="text-slate-400 font-mono text-xs">@{post.author_name}</span>
                                         </div>
+                                    </td>
+                                    <td className="p-5">
+                                        <div className="flex flex-wrap gap-1 max-w-[120px]">
+                                            {(post.tags || []).slice(0, 3).map(t => (
+                                                <span key={t} className="text-[9px] font-black text-cyan-500/60 bg-cyan-500/5 border border-cyan-500/10 px-1.5 py-0.5 rounded-md uppercase tracking-tight">#{t}</span>
+                                            ))}
+                                        </div>
+                                    </td>
+                                    <td className="p-5">
+                                        <div className="flex items-center justify-center gap-3 text-xs font-mono">
+                                            <span className="flex items-center gap-1 text-red-400"><Heart size={11} fill="currentColor" /> {post.total_likes}</span>
+                                            <span className="flex items-center gap-1 text-blue-400"><MessageSquare size={11} /> {post.total_comments}</span>
+                                            <span className="flex items-center gap-1 text-amber-400"><Star size={11} fill="currentColor" /> {post.avg_rating || 0}</span>
+                                        </div>
+                                    </td>
+                                    <td className="p-5 text-slate-500 font-mono text-xs italic whitespace-nowrap">
+                                        {new Date(post.created_at).toLocaleDateString('vi-VN')}
+                                    </td>
+                                    <td className="p-5 text-center">
+                                        <button onClick={() => handleDelete(post.id, post.title)} title="Xóa bài viết"
+                                            className="inline-flex items-center gap-1.5 px-3 py-2 text-red-400 bg-red-500/5 border border-red-500/20 rounded-xl hover:bg-red-500/10 hover:border-red-500/50 transition-all active:scale-90 text-[11px] font-black uppercase tracking-widest">
+                                            <Trash2 size={13} strokeWidth={1.5} /> Xóa
+                                        </button>
                                     </td>
                                 </tr>
                             ))
-                        ) : (
-                            <tr>
-                                <td colSpan="5" className="p-20 text-center text-slate-600 italic font-mono uppercase tracking-[0.2em]">
-                                    NO RECORD MATCHES CURRENT QUERY
-                                </td>
-                            </tr>
                         )}
                     </tbody>
                 </table>
