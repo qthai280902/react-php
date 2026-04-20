@@ -17,38 +17,30 @@ const EditProfileModal = ({ isOpen, onClose, profile, token, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // [CHUẨN HÓA DATE]: MySQL datetime "YYYY-MM-DD HH:MM:SS" -> ISO "YYYY-MM-DDTHH:MM:SS"
-    const parseMySQLDate = (dateStr) => {
-        if (!dateStr) return 0;
-        return new Date(dateStr.replace(' ', 'T')).getTime();
+    // [HÀM TÍNH TOÁN COOLDOWN CHUẨN XÁC]
+    const getCooldownStatus = (lastChangeDate) => {
+        if (!lastChangeDate) return { isCoolingDown: false, timeLeft: '' };
+        
+        const lastChangeTime = new Date(lastChangeDate.replace(' ', 'T')).getTime();
+        const now = Date.now();
+        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+        const diff = sevenDaysMs - (now - lastChangeTime);
+        
+        if (diff <= 0) return { isCoolingDown: false, timeLeft: '' };
+        
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        
+        let timeStr = "";
+        if (days > 0) timeStr = `${days} ngày ${hours} giờ`;
+        else timeStr = `${hours} giờ`;
+        
+        return { isCoolingDown: true, timeLeft: timeStr };
     };
 
-    const lastChange = parseMySQLDate(profile?.last_name_change_at);
-    const now = Date.now();
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-    const elapsed = now - lastChange;
-    
-    // [PHÒNG THỦ NULL]: Chỉ tính cooldown nếu có lịch sử đổi tên hợp lệ
-    const isCoolingDown = profile?.last_name_change_at ? (elapsed < sevenDaysMs) : false;
-
-    let cooldownText = '';
-    let isNameChangeDisabled = false;
-
-    if (isCoolingDown) {
-        isNameChangeDisabled = true;
-        const remainingMs = sevenDaysMs - elapsed;
-        const days = Math.floor(remainingMs / (24 * 60 * 60 * 1000));
-        const hours = Math.floor((remainingMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-        const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
-
-        if (days > 0) {
-            cooldownText = `Thời gian còn lại: ${days} ngày ${hours} giờ`;
-        } else {
-            cooldownText = `Thời gian còn lại: ${hours} giờ ${minutes} phút`;
-        }
-    } else {
-        cooldownText = "Bạn có thể thay đổi tên hiển thị lúc này.";
-    }
+    const cooldown = getCooldownStatus(profile?.last_name_change_at);
+    const isCoolingDown = cooldown.isCoolingDown;
+    const timeLeft = cooldown.timeLeft;
 
     if (!isOpen) return null;
 
@@ -161,11 +153,7 @@ const EditProfileModal = ({ isOpen, onClose, profile, token, onSuccess }) => {
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6">
-                    {errorMsg && (
-                        <div className="mb-6 p-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-sm font-bold flex items-start gap-2">
-                            <Info size={18} className="mt-0.5 shrink-0" /> {errorMsg}
-                        </div>
-                    )}
+                    {/* [DỌN DẸP]: Loại bỏ cảnh báo kép tĩnh ở đầu form theo yêu cầu CTO */}
 
                     <div className="space-y-6">
                         {/* Cụm Ảnh Bìa & Đại Diện */}
@@ -222,12 +210,16 @@ const EditProfileModal = ({ isOpen, onClose, profile, token, onSuccess }) => {
                                     value={fullName}
                                     onChange={(e) => setFullName(e.target.value)}
                                     placeholder="Ví dụ: Nguyễn Văn A"
-                                    className={`w-full bg-white border border-slate-200 focus:border-blue-500 rounded-xl px-4 py-3 text-slate-800 font-bold outline-none ring-4 ring-transparent focus:ring-blue-50 transition-all ${isNameChangeDisabled ? 'bg-slate-300 opacity-50 cursor-not-allowed text-slate-500' : ''}`}
+                                    className={`w-full bg-white border border-slate-200 focus:border-blue-500 rounded-xl px-4 py-3 text-slate-800 font-bold outline-none ring-4 ring-transparent focus:ring-blue-50 transition-all ${isCoolingDown ? 'bg-slate-100 opacity-50 cursor-not-allowed text-slate-500' : ''}`}
                                     required
-                                    disabled={isNameChangeDisabled}
+                                    disabled={isCoolingDown}
                                 />
-                                <div className={`text-[10px] font-black mt-2 flex items-center gap-1 uppercase tracking-tight ${isNameChangeDisabled ? 'text-red-500' : 'text-emerald-500'}`}>
-                                    <Info size={12} /> {isNameChangeDisabled ? cooldownText : (!isCoolingDown && "Bạn có thể thay đổi tên hiển thị lúc này.")}
+                                <div className={`text-[10px] font-black mt-2 flex items-center gap-1 uppercase tracking-tight ${isCoolingDown ? 'text-red-500' : 'text-emerald-500'}`}>
+                                    <Info size={12} /> 
+                                    {isCoolingDown 
+                                        ? `Bạn chỉ được đổi tên sau ${timeLeft} nữa.` 
+                                        : "Bạn có thể thay đổi tên hiển thị lúc này."
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -244,8 +236,8 @@ const EditProfileModal = ({ isOpen, onClose, profile, token, onSuccess }) => {
                         </button>
                         <button 
                             type="submit" 
-                            disabled={loading || isNameChangeDisabled}
-                            className={`px-8 py-3 bg-slate-900 hover:bg-black text-white font-black rounded-xl shadow-lg active:scale-95 transition-all uppercase tracking-widest text-xs flex items-center gap-2 ${(loading || isNameChangeDisabled) && 'opacity-50 cursor-not-allowed bg-slate-300 text-slate-500 shadow-none'}`}
+                            disabled={loading || isCoolingDown}
+                            className={`px-8 py-3 bg-slate-900 hover:bg-black text-white font-black rounded-xl shadow-lg active:scale-95 transition-all uppercase tracking-widest text-xs flex items-center gap-2 ${(loading || isCoolingDown) && 'opacity-50 cursor-not-allowed bg-slate-300 shadow-none'}`}
                         >
                             {loading ? 'Đang lưu...' : 'Cập nhật thông tin'}
                         </button>

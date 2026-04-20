@@ -45,11 +45,18 @@ const UserProfile = () => {
     const [followLoading, setFollowLoading] = useState(false);
 
     useEffect(() => {
+        // [DEFENSIVE ROUTING]: Chốt chặn đường dẫn undefined
+        if (id === 'undefined') {
+            toast.error("Phiên đăng nhập cũ. Vui lòng đăng xuất và đăng nhập lại!");
+            navigate('/');
+            return;
+        }
         if (!id) return;
+
         fetchProfile();
         fetchUserPosts();
         fetchUserReposts();
-    }, [id]); // BẮT BUỘC: id trong dependency array để fix lỗi cache component khi nhảy profile
+    }, [id, navigate]); // BẮT BUỘC: id trong dependency array để fix lỗi cache component khi nhảy profile
 
     useEffect(() => {
         if (isOwnProfile && activeTab === 'trash') {
@@ -404,7 +411,8 @@ const UserProfile = () => {
                                             <div className="absolute right-0 top-0 p-8 text-slate-50 group-hover/item:text-blue-50 transition-colors">
                                                 <ChevronRight size={48} strokeWidth={1} />
                                             </div>
-                                            {post.is_hidden && (
+                                            {/* [FIX BUG 0]: Sử dụng > 0 để tránh React in số 0 khi is_hidden = 0 */}
+                                            {post.is_hidden > 0 && (
                                                 <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-600 bg-amber-100 px-2 py-1 rounded-full mb-3 uppercase tracking-widest border border-amber-200">
                                                     <EyeOff size={10} strokeWidth={2} /> Đang ẩn
                                                 </span>
@@ -450,6 +458,12 @@ const UserProfile = () => {
                                                     <Repeat size={12} strokeWidth={2} /> Transmitted from @{repost.author_name}
                                                 </span>
                                             </div>
+                                            {/* [FIX BUG 0]: Đảm bảo không rớt số 0 khi bài viết Repost công khai */}
+                                            {repost.is_hidden > 0 && (
+                                                 <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-600 bg-amber-100 px-2 py-1 rounded-full mb-3 uppercase tracking-widest border border-amber-200">
+                                                    <EyeOff size={10} strokeWidth={2} /> Đang ẩn
+                                                </span>
+                                            )}
                                             <h3 className="text-xl font-bold text-slate-900 group-hover/item:text-green-600 mb-2 transition-colors">/{repost.title}</h3>
                                             <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed">{repost.content}</p>
                                         </div>
@@ -536,12 +550,12 @@ const UserProfile = () => {
                         </>
                     )}
 
-                    {/* ── EMPTY STATE ── */}
-                    {((activeTab === 'posts' && posts.length === 0) || (activeTab === 'reposts' && reposts.length === 0)) && (
+                    {/* ── EMPTY STATE (Dùng ternary để triệt tiêu số 0) ── */}
+                    {((activeTab === 'posts' && posts.length === 0) || (activeTab === 'reposts' && reposts.length === 0)) ? (
                         <div className="text-center py-20 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 text-slate-300 font-mono text-[10px] uppercase tracking-[0.3em]">
                             Không có dữ liệu hiển thị
                         </div>
-                    )}
+                    ) : null}
                 </div>
             </div>
             <EditProfileModal 

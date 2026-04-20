@@ -41,7 +41,7 @@ const Navbar = () => {
                   </Link>
                 )}
                 <div className="flex items-center space-x-4 pl-4 border-l border-slate-200">
-                  <Link to={`/profile/${user.uid}`} className="flex items-center space-x-2 text-slate-900 hover:text-blue-600 transition-colors no-underline">
+                  <Link to={`/profile/${user?.uid || user?.id}`} className="flex items-center space-x-2 text-slate-900 hover:text-blue-600 transition-colors no-underline">
                     {/* Avatar Container chuẩn UI Premium */}
                     <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-[10px] font-black overflow-hidden shadow-sm uppercase border border-white">
                       {user?.avatar_image ? (
@@ -91,7 +91,7 @@ const Navbar = () => {
                   <LayoutDashboard size={20} strokeWidth={1.5} /> Dashboard Admin
                 </Link>
               )}
-              <Link to={`/profile/${user.uid}`} className="flex items-center gap-3 font-bold text-slate-900 no-underline px-4 py-2">
+              <Link to={`/profile/${user?.uid || user?.id}`} className="flex items-center gap-3 font-bold text-slate-900 no-underline px-4 py-2">
                 <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center text-white text-[10px] font-black overflow-hidden shadow-sm uppercase">
                    {user?.avatar_image ? (
                         <img src={`http://localhost:8000/uploads/${user.avatar_image}`} alt="Avatar" className="w-full h-full object-cover" />

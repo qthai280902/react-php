@@ -1,7 +1,7 @@
 <?php
 /**
- * [API PROFILE V3] - CẬP NHẬT TRẠNG THÁI THEO DÕI
- * Tiếp nhận ID mã hóa (UID) hoặc ID số, trả về thông tin người dùng công khai kèm trạng thái is_following.
+ * [API PROFILE V4] - SMART ID RESOLUTION & SECURITY
+ * Hỗ trợ cả Numeric ID (cho người dùng cũ) và Hash ID (UID) cho URL Hardening.
  */
 
 include_once '../../config/database.php';
@@ -11,20 +11,23 @@ include_once '../auth/token_helper.php';
 $database = new Database();
 $db = $database->getConnection();
 
-// [SMART DECODING]: Ưu tiên giải mã UID
 $id_input = isset($_GET['id']) ? $_GET['id'] : null;
 $user_id = null;
 
 if ($id_input) {
-    $user_id = decodeId($id_input);
-    if (!$user_id && is_numeric($id_input)) {
+    // [SMART RESOLUTION]: Ưu tiên Numeric ID để tránh giải mã nhầm số nguyên
+    if (is_numeric($id_input)) {
         $user_id = (int)$id_input;
+    } else {
+        // Nếu là chuỗi (UID), thực hiện giải mã
+        $user_id = decodeId($id_input);
     }
 }
 
+// Chốt chặn cuối: Nếu không có ID hợp lệ hoặc giải mã thất bại
 if (!$user_id) {
     http_response_code(404);
-    echo json_encode(["status" => "error", "message" => "Không tìm thấy người dùng."]);
+    echo json_encode(["status" => "error", "message" => "Không tìm thấy định danh người dùng hợp lệ."]);
     exit();
 }
 
@@ -36,7 +39,7 @@ $user_info = $stmt_user->fetch(PDO::FETCH_ASSOC);
 
 if (!$user_info) {
     http_response_code(404);
-    echo json_encode(["message" => "Người dùng không tồn tại."]);
+    echo json_encode(["status" => "error", "message" => "Người dùng không tồn tại."]);
     exit();
 }
 
@@ -44,6 +47,7 @@ if (!$user_info) {
 $is_following = false;
 $auth_user = get_auth_user(); 
 if ($auth_user) {
+    // [SQL SECURITY]: Kiểm tra quan hệ follow bằng composite key
     $check_follow = $db->prepare("SELECT COUNT(*) FROM follows WHERE follower_id = ? AND following_id = ?");
     $check_follow->execute([$auth_user['id'], $user_id]);
     $is_following = ($check_follow->fetchColumn() > 0);
@@ -74,7 +78,7 @@ echo json_encode([
         "avatar_image" => $user_info['avatar_image'],
         "cover_image" => $user_info['cover_image'],
         "created_at" => $user_info['created_at'],
-        "is_following" => $is_following, // TRẠNG THÁI INIT
+        "is_following" => $is_following,
         "stats" => [
             "followers" => $followers_count,
             "following" => $following_count,
