@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import axiosClient from '../api/axiosClient';
+import toast from 'react-hot-toast';
 
 const Login = () => {
     const [isRegister, setIsRegister] = useState(false);
     const [formData, setFormData] = useState({ username: '', password: '' });
     const [errorMsg, setErrorMsg] = useState('');
     const [loading, setLoading] = useState(false);
+    const { login } = useAuth();
     const navigate = useNavigate();
 
     const handleChange = (e) => {
@@ -27,9 +30,25 @@ const Login = () => {
                 alert('Đăng ký thành công! Hãy đăng nhập.');
                 setIsRegister(false);
             } else {
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('user', JSON.stringify(data.user));
-                window.dispatchEvent(new Event('storage')); // Kích hoạt render lại Navbar
+                // [DEFENSIVE DIAGNOSTIC]: In log để soi cấu trúc thực tế của Backend
+                console.log("CHẨN ĐOÁN LOGIN RESPONSE:", data);
+
+                // [SMART EXTRACTION]: Chuỗi fallback bất bại để lấy User data
+                const userData = data.user || data.data?.user || data.data || data;
+                const userToken = data.token || data.data?.token;
+
+                // [INTEGRITY GUARD]: Chặn đứng nếu dữ liệu rỗng hoặc sai cấu trúc
+                if (!userData || !userData.id) {
+                    console.error("LỖI CHÍ MẠNG: Không tìm thấy cục dữ liệu User trong Response!", data);
+                    toast.error("Lỗi đồng bộ dữ liệu từ Server!");
+                    setErrorMsg("Không thể xác thực thông tin người dùng.");
+                    return; 
+                }
+
+                // [CENTRALIZED AUTH]: Chỉ kích hoạt khi data đã sạch
+                login(userData, userToken);
+                
+                toast.success('Đăng nhập thành công!');
                 navigate('/');
             }
         } catch (err) {

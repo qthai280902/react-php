@@ -61,9 +61,10 @@ if (empty($title) || empty($content)) {
     exit();
 }
 
-// Chống XSS
+// Chống XSS cho tiêu đề, nhưng giữ nguyên HTML cho Content (vì dùng Rich Text)
 $title   = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
-$content = htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
+// [RICH TEXT SYNC]: Không dùng htmlspecialchars ở đây vì Frontend đã dùng DOMPurify
+$content = $content; 
 
 // ── 3. CẤU HÌNH VALIDATE FILE ──
 $ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];

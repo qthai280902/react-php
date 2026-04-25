@@ -1,5 +1,5 @@
-import React, { useState, useContext } from 'react';
-import { X, Upload, Info, ImagePlus, User } from 'lucide-react';
+import React, { useState, useContext, useEffect } from 'react';
+import { X, Upload, Info, ImagePlus, User, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axiosClient from '../api/axiosClient';
 import { AuthContext } from '../context/AuthContext';
@@ -17,30 +17,58 @@ const EditProfileModal = ({ isOpen, onClose, profile, token, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
-    // [HÀM TÍNH TOÁN COOLDOWN CHUẨN XÁC]
-    const getCooldownStatus = (lastChangeDate) => {
-        if (!lastChangeDate) return { isCoolingDown: false, timeLeft: '' };
-        
-        const lastChangeTime = new Date(lastChangeDate.replace(' ', 'T')).getTime();
-        const now = Date.now();
-        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-        const diff = sevenDaysMs - (now - lastChangeTime);
-        
-        if (diff <= 0) return { isCoolingDown: false, timeLeft: '' };
-        
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        
-        let timeStr = "";
-        if (days > 0) timeStr = `${days} ngày ${hours} giờ`;
-        else timeStr = `${hours} giờ`;
-        
-        return { isCoolingDown: true, timeLeft: timeStr };
-    };
+    const [isCoolingDown, setIsCoolingDown] = useState(false);
+    const [timeLeftStr, setTimeLeftStr] = useState("");
 
-    const cooldown = getCooldownStatus(profile?.last_name_change_at);
-    const isCoolingDown = cooldown.isCoolingDown;
-    const timeLeft = cooldown.timeLeft;
+    // [HÀM TÍNH TOÁN COOLDOWN LIVE]
+    useEffect(() => {
+        const updateTimer = () => {
+            console.log("Ngày đổi tên từ API:", profile?.last_name_change_at);
+            
+            if (!profile?.last_name_change_at) {
+                setIsCoolingDown(false);
+                return;
+            }
+
+            // [EPOCH HANDLING]: Xử lý dữ liệu đã được Backend convert sang Epoch (seconds)
+            const lastChangeMs = parseInt(profile.last_name_change_at) * 1000;
+            
+            if (isNaN(lastChangeMs)) {
+                console.error("Lỗi: Dữ liệu thời gian không hợp lệ (Expected Epoch):", profile.last_name_change_at);
+                setIsCoolingDown(false);
+                return;
+            }
+            const now = Date.now();
+            const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+            const diff = sevenDaysMs - (now - lastChangeMs);
+
+            if (diff <= 0) {
+                setIsCoolingDown(false);
+                return;
+            }
+
+            setIsCoolingDown(true);
+            
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+            const timeParts = [];
+            if (days > 0) timeParts.push(`${days} ngày`);
+            if (hours > 0) timeParts.push(`${hours} giờ`);
+            if (minutes > 0) timeParts.push(`${minutes} phút`);
+            if (seconds > 0 && days === 0) timeParts.push(`${seconds} giây`);
+            
+            setTimeLeftStr(timeParts.join(' '));
+        };
+
+        // [IMMEDIATE EXECUTION]: Chống flicker 1 giây đầu tiên
+        updateTimer();
+        const intervalId = setInterval(updateTimer, 1000);
+
+        return () => clearInterval(intervalId);
+    }, [profile]);
 
     if (!isOpen) return null;
 
@@ -102,34 +130,34 @@ const EditProfileModal = ({ isOpen, onClose, profile, token, onSuccess }) => {
             const res = await axiosClient.post('/api/users/update_profile.php', formData, {
                 headers: { 
                     'Authorization': 'Bearer ' + token,
-                    // Ép Axios tự động tính toán boundary, không được để mặc định JSON của client
                     'Content-Type': 'multipart/form-data'
                 }
             });
 
+            // [DEFENSIVE DIAGNOSTIC]: Soi kỹ data từ server
             console.log("Dữ liệu Update trả về (Raw):", res);
             
-            // [BỐC TÁCH AN TOÀN]
-            const updatedUser = res?.data?.data || res?.data;
+            // [SMART EXTRACTION]: Fallback chain tương tự Login.jsx
+            const updatedUser = res?.data?.user || res?.data?.data || res?.user || res?.data || res;
+            const status = res?.status || res?.data?.status;
+
             console.log("Dữ liệu User đã bóc tách:", updatedUser);
 
-            // [INTEGRITY CHECK] - Chỉ gọi update nếu thực sự có data hợp lệ
-            if (res.status === 'success' && updatedUser && updatedUser.full_name) {
-                // ÉP RE-RENDER: Dùng Clone Object
+            // [INTEGRITY CHECK]: Đảm bảo status là success và có ít nhất full_name
+            if ((status === 'success' || status === 200) && updatedUser && updatedUser.full_name) {
+                // ÉP RE-RENDER: Cập nhật Context ngay
                 setAuthUser({ ...updatedUser });
                 
                 toast.success('Hồ sơ đã được đồng bộ thành công');
                 
-                // Cập nhật state trang Profile (nếu có)
                 if (onSuccess) onSuccess({ ...updatedUser });
-                
                 onClose();
             } else {
-                console.error("Lỗi: Dữ liệu trả về bị rỗng hoặc thiếu full_name.");
-                throw new Error("Cập nhật thất bại. Vui lòng kiểm tra lại kết nối.");
+                console.error("LỖI ĐỒNG BỘ: Data không hợp lệ hoặc thiếu full_name", res);
+                throw new Error("Cập nhật thất bại. Dữ liệu từ Server không hợp lệ.");
             }
         } catch (err) {
-            console.error(err);
+            console.error("Submit Error:", err);
             const message = err?.response?.data?.message || err.message || 'Lỗi: Không thể kết nối với máy chủ.';
             setErrorMsg(message);
             toast.error(message);
@@ -154,6 +182,11 @@ const EditProfileModal = ({ isOpen, onClose, profile, token, onSuccess }) => {
 
                 <form onSubmit={handleSubmit} className="p-6">
                     {/* [DỌN DẸP]: Loại bỏ cảnh báo kép tĩnh ở đầu form theo yêu cầu CTO */}
+                    {errorMsg && (
+                         <div className="mb-6 p-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-sm font-bold flex items-start gap-2 animate-in slide-in-from-top-2">
+                            <Info size={18} className="mt-0.5 shrink-0" /> {errorMsg}
+                        </div>
+                    )}
 
                     <div className="space-y-6">
                         {/* Cụm Ảnh Bìa & Đại Diện */}
@@ -214,13 +247,14 @@ const EditProfileModal = ({ isOpen, onClose, profile, token, onSuccess }) => {
                                     required
                                     disabled={isCoolingDown}
                                 />
-                                <div className={`text-[10px] font-black mt-2 flex items-center gap-1 uppercase tracking-tight ${isCoolingDown ? 'text-red-500' : 'text-emerald-500'}`}>
-                                    <Info size={12} /> 
-                                    {isCoolingDown 
-                                        ? `Bạn chỉ được đổi tên sau ${timeLeft} nữa.` 
-                                        : "Bạn có thể thay đổi tên hiển thị lúc này."
-                                    }
-                                </div>
+                                {isCoolingDown ? (
+                                    <div className="text-[11px] font-black mt-2.5 flex items-start gap-2 uppercase tracking-tight text-red-600 bg-red-50 p-3 rounded-xl border border-red-100 animate-in slide-in-from-top-1">
+                                        <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                                        <span>Bạn chỉ có thể đổi tên tiếp theo sau: <span className="text-red-700 underline decoration-red-300 underline-offset-2">{timeLeftStr}</span> nữa.</span>
+                                    </div>
+                                ) : (
+                                    <div className="h-0 md:h-2" /> // Thu gọn khoảng trống khi Ready
+                                )}
                             </div>
                         </div>
                     </div>

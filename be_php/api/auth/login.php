@@ -16,9 +16,28 @@ if (empty($data->username) || empty($data->password)) {
 }
 
 // SELECT đầy đủ thông tin để đồng bộ Avatar sau khi Re-login
-$query = "SELECT id, username, password, full_name, role, avatar_image, cover_image FROM users WHERE username = ? LIMIT 1";
+$query = "SELECT id, username, password, full_name, role, avatar_image, cover_image, UNIX_TIMESTAMP(last_name_change_at) as last_name_change_at FROM users WHERE username = ? LIMIT 1";
 $stmt = $db->prepare($query);
-$stmt->execute([$data->username]);
+
+try {
+    $stmt->execute([$data->username]);
+} catch (PDOException $e) {
+    http_response_code(500);
+    // [DEFENSIVE CHECK]: Phát hiện lỗi thiếu cột (1054)
+    if ($e->getCode() == '42S22' || str_contains($e->getMessage(), '1054')) {
+        echo json_encode(array(
+            "status" => "error",
+            "message" => "Hệ thống CSDL chưa được cập nhật mấu chốt. Vui lòng chạy file patch_db.php để đồng bộ.",
+            "debug_error" => $e->getMessage()
+        ));
+    } else {
+        echo json_encode(array(
+            "status" => "error",
+            "message" => "Lỗi CSDL: " . $e->getMessage()
+        ));
+    }
+    exit();
+}
 
 if ($stmt->rowCount() > 0) {
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -29,6 +48,7 @@ if ($stmt->rowCount() > 0) {
     $role = $row['role'];
     $avatar_image = $row['avatar_image'];
     $cover_image = $row['cover_image'];
+    $last_name_change_at = $row['last_name_change_at'];
 
     // Kiểm tra mật khẩu
     if (password_verify($data->password, $hashed_password)) {
@@ -57,7 +77,8 @@ if ($stmt->rowCount() > 0) {
                 "full_name" => $full_name,
                 "role" => $role,
                 "avatar_image" => $avatar_image,
-                "cover_image" => $cover_image
+                "cover_image" => $cover_image,
+                "last_name_change_at" => $last_name_change_at
             ]
         ));
     } else {

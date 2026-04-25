@@ -418,7 +418,9 @@ const UserProfile = () => {
                                                 </span>
                                             )}
                                             <h3 className="text-xl font-bold text-slate-900 group-hover/item:text-blue-600 mb-2 tracking-tight transition-colors">/{post.title}</h3>
-                                            <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed">{post.content}</p>
+                                            <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed">
+                                                {post.content ? post.content.replace(/<[^>]*>?/gm, '') : ''}
+                                            </p>
                                         </div>
                                     </Link>
 
@@ -465,7 +467,9 @@ const UserProfile = () => {
                                                 </span>
                                             )}
                                             <h3 className="text-xl font-bold text-slate-900 group-hover/item:text-green-600 mb-2 transition-colors">/{repost.title}</h3>
-                                            <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed">{repost.content}</p>
+                                            <p className="text-slate-500 text-sm line-clamp-2 leading-relaxed">
+                                                {repost.content ? repost.content.replace(/<[^>]*>?/gm, '') : ''}
+                                            </p>
                                         </div>
                                     </Link>
 

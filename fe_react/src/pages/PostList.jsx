@@ -250,9 +250,9 @@ const PostList = () => {
                                         </h2>
                                     </Link>
                                     
-                                    {/* Excerpt */}
+                                    {/* Excerpt - Chống tràn thẻ HTML bằng cách Strip toàn bộ trước khi hiển thị */}
                                     <p className="text-sm text-slate-600 line-clamp-2 mb-4">
-                                        {post.content}
+                                        {post.content ? post.content.replace(/<[^>]*>?/gm, '') : ''}
                                     </p>
                                     
                                     {/* ── INTERACTION FOOTER ── */}

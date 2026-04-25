@@ -117,7 +117,15 @@ try {
         }
     }
 
-    $query = "UPDATE users SET full_name = :full_name, avatar_image = :avatar_image, cover_image = :cover_image WHERE id = :id";
+    $query = "UPDATE users SET full_name = :full_name, avatar_image = :avatar_image, cover_image = :cover_image";
+    
+    // [COOLDOWN SYNC]: Nếu có đổi tên, cập nhật luôn timestamp ở bảng users
+    if ($is_changing_name) {
+        $query .= ", last_name_change_at = NOW()";
+    }
+    
+    $query .= " WHERE id = :id";
+    
     $stmt = $db->prepare($query);
     
     $stmt->bindParam(':full_name', $full_name);
@@ -152,7 +160,7 @@ try {
     }
 
     // Lấy lại user mới trả về Frontend cập nhật LocalStorage
-    $query_new = "SELECT id, username, full_name, role, avatar_image, cover_image, created_at FROM users WHERE id = :id";
+    $query_new = "SELECT id, username, full_name, role, avatar_image, cover_image, created_at, UNIX_TIMESTAMP(last_name_change_at) as last_name_change_at FROM users WHERE id = :id";
     $stmt_new = $db->prepare($query_new);
     $stmt_new->bindParam(':id', $user_id);
     $stmt_new->execute();

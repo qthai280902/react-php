@@ -23,13 +23,15 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = (userData, token) => {
-        // [GHI LÒNG TẠC DẠ]: Đảm bảo lưu đúng và đủ object user mới nhất vào bộ nhớ
+        // [AUTHORITATIVE STORAGE]: Lưu trữ đồng bộ vào LocalStorage
         if (userData) {
             localStorage.setItem('user', JSON.stringify(userData));
         }
         if (token) {
             localStorage.setItem('token', token);
         }
+        
+        // Cập nhật Virtual DOM State ngay lập tức
         setUser(userData ? { ...userData } : null);
     };
 
@@ -40,12 +42,21 @@ export const AuthProvider = ({ children }) => {
     };
 
     const setAuthUser = (userData) => {
-        // Cập nhật bộ nhớ vật lý trước khi kích hoạt Virtual DOM re-render
-        if (userData) {
-            localStorage.setItem('user', JSON.stringify(userData));
+        if (!userData) {
+            setUser(null);
+            localStorage.removeItem('user');
+            return;
         }
+
+        // [IDENTITY NORMALIZATION]: Luôn đảm bảo có uid để các logic isOwnProfile không bị vỡ
+        const normalizedUser = { 
+            ...userData, 
+            uid: userData.uid || userData.id 
+        };
+
+        localStorage.setItem('user', JSON.stringify(normalizedUser));
         // Kỹ thuật Clone Object: Tạo ra tham chiếu mới để React bắt buộc phải quét lại UI
-        setUser(userData ? { ...userData } : null);
+        setUser({ ...normalizedUser });
     };
 
     return (

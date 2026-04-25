@@ -32,7 +32,7 @@ if (!$user_id) {
 }
 
 // 1. Lấy thông tin cơ bản
-$user_query = "SELECT id, username, full_name, role, avatar_image, cover_image, created_at FROM users WHERE id = ?";
+$user_query = "SELECT id, username, full_name, role, avatar_image, cover_image, created_at, UNIX_TIMESTAMP(last_name_change_at) as last_name_change_at FROM users WHERE id = ?";
 $stmt_user = $db->prepare($user_query);
 $stmt_user->execute([$user_id]);
 $user_info = $stmt_user->fetch(PDO::FETCH_ASSOC);
@@ -78,6 +78,7 @@ echo json_encode([
         "avatar_image" => $user_info['avatar_image'],
         "cover_image" => $user_info['cover_image'],
         "created_at" => $user_info['created_at'],
+        "last_name_change_at" => $user_info['last_name_change_at'],
         "is_following" => $is_following,
         "stats" => [
             "followers" => $followers_count,
